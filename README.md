@@ -130,10 +130,11 @@ dotnet test --collect:"XPlat Code Coverage"
 
 ## 📚 文档
 
+- ⚡ [快速配置指南](./快速配置指南.md) - 5分钟快速上手
 - 📖 [用户使用手册](./用户使用手册.md) - 详细的使用指南
 - 🔧 [开发者文档](./开发者文档.md) - 技术架构和开发指南
 - 🚨 [故障排除指南](./故障排除指南.md) - 常见问题解决方案
-- 🌐 [API文档](https://localhost:7001/swagger) - 在线API文档
+- 🌐 [API文档](https://localhost:7109/swagger) - 在线API文档
 
 ## 🛠️ 技术栈
 

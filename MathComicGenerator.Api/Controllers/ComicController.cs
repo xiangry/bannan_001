@@ -249,6 +249,32 @@ public class ComicController : ControllerBase
     }
 
     /// <summary>
+    /// 获取配置状态
+    /// </summary>
+    /// <returns>配置状态信息</returns>
+    [HttpGet("config-status")]
+    public ActionResult GetConfigStatus([FromServices] ConfigurationValidationService configValidator)
+    {
+        try
+        {
+            var isValid = configValidator.ValidateConfiguration();
+            var summary = configValidator.GetConfigurationSummary();
+            
+            return Ok(new
+            {
+                isValid = isValid,
+                configuration = summary,
+                timestamp = DateTime.UtcNow
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting configuration status");
+            return StatusCode(500, new { error = "获取配置状态时发生错误" });
+        }
+    }
+
+    /// <summary>
     /// 获取统计信息
     /// </summary>
     /// <returns>系统统计信息</returns>

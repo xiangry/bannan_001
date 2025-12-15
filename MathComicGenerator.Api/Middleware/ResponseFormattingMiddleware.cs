@@ -44,36 +44,36 @@ public class ResponseFormattingMiddleware
         // 添加请求ID到响应头
         if (context.Items.TryGetValue("RequestId", out var requestId))
         {
-            context.Response.Headers.Add("X-Request-ID", requestId?.ToString());
+            context.Response.Headers["X-Request-ID"] = requestId?.ToString();
         }
 
         // 添加处理时间
         if (context.Items.TryGetValue("StartTime", out var startTimeObj) && startTimeObj is DateTime startTime)
         {
             var duration = DateTime.UtcNow - startTime;
-            context.Response.Headers.Add("X-Processing-Time", $"{duration.TotalMilliseconds}ms");
+            context.Response.Headers["X-Processing-Time"] = $"{duration.TotalMilliseconds}ms";
         }
 
         // 添加API版本
-        context.Response.Headers.Add("X-API-Version", "1.0");
+        context.Response.Headers["X-API-Version"] = "1.0";
 
         // 添加时间戳
-        context.Response.Headers.Add("X-Timestamp", DateTime.UtcNow.ToString("O"));
+        context.Response.Headers["X-Timestamp"] = DateTime.UtcNow.ToString("O");
 
         // 安全头
         if (!context.Response.Headers.ContainsKey("X-Content-Type-Options"))
         {
-            context.Response.Headers.Add("X-Content-Type-Options", "nosniff");
+            context.Response.Headers["X-Content-Type-Options"] = "nosniff";
         }
 
         if (!context.Response.Headers.ContainsKey("X-Frame-Options"))
         {
-            context.Response.Headers.Add("X-Frame-Options", "DENY");
+            context.Response.Headers["X-Frame-Options"] = "DENY";
         }
 
         if (!context.Response.Headers.ContainsKey("X-XSS-Protection"))
         {
-            context.Response.Headers.Add("X-XSS-Protection", "1; mode=block");
+            context.Response.Headers["X-XSS-Protection"] = "1; mode=block";
         }
     }
 

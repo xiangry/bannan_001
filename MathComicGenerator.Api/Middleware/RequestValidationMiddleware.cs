@@ -36,7 +36,7 @@ public class RequestValidationMiddleware
         // 添加请求ID用于追踪
         if (!context.Request.Headers.ContainsKey("X-Request-ID"))
         {
-            context.Request.Headers.Add("X-Request-ID", Guid.NewGuid().ToString());
+            context.Request.Headers["X-Request-ID"] = Guid.NewGuid().ToString();
         }
 
         var requestId = context.Request.Headers["X-Request-ID"].FirstOrDefault();

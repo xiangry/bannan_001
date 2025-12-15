@@ -2,6 +2,10 @@
 echo 启动数学漫画生成器开发环境...
 
 echo.
+echo 检查配置...
+powershell -ExecutionPolicy Bypass -File check-config.ps1
+
+echo.
 echo 正在构建项目...
 dotnet build
 
