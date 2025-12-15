@@ -1,0 +1,6 @@
+@MathComicGenerator.Api_HostAddress = http://localhost:5082
+
+GET {{MathComicGenerator.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

@@ -1,0 +1,198 @@
+@using MathComicGenerator.Shared.Models
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<div class="history-container">
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h3 class="card-title mb-1">历史记录</h3>
+                <p class="card-subtitle text-muted mb-0">查看和管理您生成的漫画</p>
+            </div>
+            <div class="history-actions">
+                <button class="btn btn-outline-primary btn-sm me-2" @onclick="RefreshHistory">
+                    <i class="fas fa-sync-alt me-1"></i>
+                    刷新
+                </button>
+            </div>
+        </div>
+
+        <div class="card-body">
+            @if (IsLoading)
+            {
+                <div class="text-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2 text-muted">正在加载历史记录...</p>
+                </div>
+            }
+            else if (ComicHistory.Any())
+            {
+                <div class="history-stats mb-3">
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <h4 class="stat-number">@ComicHistory.Count</h4>
+                                <p class="stat-label text-muted">总漫画数</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <h4 class="stat-number">@GetUniqueConceptsCount()</h4>
+                                <p class="stat-label text-muted">数学概念</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <h4 class="stat-number">@GetMostUsedAgeGroup()</h4>
+                                <p class="stat-label text-muted">常用年龄组</p>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <h4 class="stat-number">@GetTotalPanels()</h4>
+                                <p class="stat-label text-muted">总面板数</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="history-list">
+                    @foreach (var comic in ComicHistory)
+                    {
+                        <div class="history-item mb-3">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <div class="comic-info">
+                                        <h5 class="comic-title mb-1">@comic.MathConcept</h5>
+                                        <div class="comic-details">
+                                            <span class="badge bg-primary me-2">@GetAgeGroupDisplay(comic.GenerationOptions.AgeGroup)</span>
+                                            <span class="badge bg-secondary me-2">@comic.GenerationOptions.PanelCount 面板</span>
+                                            <span class="badge bg-info me-2">@GetVisualStyleDisplay(comic.GenerationOptions.VisualStyle)</span>
+                                        </div>
+                                        @if (comic.Tags.Any())
+                                        {
+                                            <div class="comic-tags mt-2">
+                                                @foreach (var tag in comic.Tags.Take(3))
+                                                {
+                                                    <span class="badge bg-light text-dark me-1">#@tag</span>
+                                                }
+                                                @if (comic.Tags.Count > 3)
+                                                {
+                                                    <span class="text-muted">+@(comic.Tags.Count - 3) 更多</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div class="comic-actions">
+                                        <button class="btn btn-outline-primary btn-sm me-2" 
+                                                @onclick="() => ViewComic(comic)">
+                                            <i class="fas fa-eye me-1"></i>
+                                            查看
+                                        </button>
+                                        <button class="btn btn-outline-success btn-sm me-2" 
+                                                @onclick="() => ShareComic(comic)">
+                                            <i class="fas fa-share me-1"></i>
+                                            分享
+                                        </button>
+                                        <button class="btn btn-outline-danger btn-sm" 
+                                                @onclick="() => DeleteComic(comic)">
+                                            <i class="fas fa-trash me-1"></i>
+                                            删除
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="empty-state text-center py-5">
+                    <i class="fas fa-history fa-4x text-muted mb-3"></i>
+                    <h4 class="text-muted">暂无历史记录</h4>
+                    <p class="text-muted">开始生成您的第一个数学漫画吧！</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public List<ComicMetadata> ComicHistory { get; set; } = new();
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    [Parameter] public EventCallback<ComicMetadata> OnView { get; set; }
+    [Parameter] public EventCallback<ComicMetadata> OnShare { get; set; }
+    [Parameter] public EventCallback<ComicMetadata> OnDelete { get; set; }
+
+    private async Task RefreshHistory()
+    {
+        await OnRefresh.InvokeAsync();
+    }
+
+    private async Task ViewComic(ComicMetadata comic)
+    {
+        await OnView.InvokeAsync(comic);
+    }
+
+    private async Task ShareComic(ComicMetadata comic)
+    {
+        await OnShare.InvokeAsync(comic);
+    }
+
+    private async Task DeleteComic(ComicMetadata comic)
+    {
+        await OnDelete.InvokeAsync(comic);
+    }
+
+    private int GetUniqueConceptsCount()
+    {
+        return ComicHistory.Select(c => c.MathConcept).Distinct().Count();
+    }
+
+    private string GetMostUsedAgeGroup()
+    {
+        if (!ComicHistory.Any()) return "无";
+        
+        var mostUsed = ComicHistory
+            .GroupBy(c => c.GenerationOptions.AgeGroup)
+            .OrderByDescending(g => g.Count())
+            .First().Key;
+            
+        return GetAgeGroupDisplay(mostUsed);
+    }
+
+    private int GetTotalPanels()
+    {
+        return ComicHistory.Sum(c => c.GenerationOptions.PanelCount);
+    }
+
+    private string GetAgeGroupDisplay(AgeGroup ageGroup)
+    {
+        return ageGroup switch
+        {
+            AgeGroup.Preschool => "学龄前",
+            AgeGroup.Elementary => "小学",
+            AgeGroup.MiddleSchool => "中学",
+            AgeGroup.HighSchool => "高中",
+            _ => "未知"
+        };
+    }
+
+    private string GetVisualStyleDisplay(VisualStyle style)
+    {
+        return style switch
+        {
+            VisualStyle.Cartoon => "卡通",
+            VisualStyle.Colorful => "多彩",
+            VisualStyle.Realistic => "写实",
+            VisualStyle.Minimalist => "简约",
+            _ => "未知"
+        };
+    }
+}

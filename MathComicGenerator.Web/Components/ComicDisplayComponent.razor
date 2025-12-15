@@ -1,0 +1,257 @@
+@using MathComicGenerator.Shared.Models
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<div class="comic-display-container">
+    @if (Comic != null)
+    {
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <h3 class="card-title mb-1">@Comic.Title</h3>
+                    <p class="card-subtitle text-muted mb-0">
+                        数学概念：@Comic.Metadata.MathConcept | 
+                        创建时间：@Comic.CreatedAt.ToString("yyyy-MM-dd HH:mm")
+                    </p>
+                </div>
+                <div class="comic-actions">
+                    <button class="btn btn-outline-primary btn-sm me-2" @onclick="SaveComic">
+                        <i class="fas fa-save me-1"></i>
+                        保存
+                    </button>
+                    <button class="btn btn-outline-success btn-sm me-2" @onclick="ShareComic">
+                        <i class="fas fa-share me-1"></i>
+                        分享
+                    </button>
+                    <div class="btn-group">
+                        <button class="btn btn-outline-secondary btn-sm dropdown-toggle" 
+                                type="button" 
+                                data-bs-toggle="dropdown">
+                            <i class="fas fa-download me-1"></i>
+                            导出
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" @onclick="() => ExportComic(ExportFormat.JSON)">JSON格式</a></li>
+                            <li><a class="dropdown-item" href="#" @onclick="() => ExportComic(ExportFormat.PDF)">PDF格式</a></li>
+                            <li><a class="dropdown-item" href="#" @onclick="() => ExportComic(ExportFormat.ZIP)">ZIP压缩包</a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card-body">
+                <div class="comic-panels-container">
+                    <div class="row">
+                        @foreach (var panel in Comic.Panels.OrderBy(p => p.Order))
+                        {
+                            <div class="col-md-6 col-lg-@(GetColumnSize()) mb-4">
+                                <div class="comic-panel">
+                                    <div class="panel-header">
+                                        <span class="panel-number">面板 @panel.Order</span>
+                                    </div>
+                                    
+                                    <div class="panel-image">
+                                        @if (!string.IsNullOrEmpty(panel.ImageUrl))
+                                        {
+                                            <img src="@panel.ImageUrl" 
+                                                 alt="Panel @panel.Order" 
+                                                 class="img-fluid panel-img"
+                                                 @onclick="() => ShowImageModal(panel)" />
+                                        }
+                                        else
+                                        {
+                                            <div class="panel-placeholder">
+                                                <i class="fas fa-image fa-3x text-muted"></i>
+                                                <p class="text-muted mt-2">图片生成中...</p>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (panel.Dialogue.Any())
+                                    {
+                                        <div class="panel-dialogue">
+                                            <h6 class="dialogue-title">对话：</h6>
+                                            @foreach (var dialogue in panel.Dialogue)
+                                            {
+                                                <div class="dialogue-bubble">
+                                                    <i class="fas fa-comment me-2"></i>
+                                                    @dialogue
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+
+                                    @if (!string.IsNullOrEmpty(panel.Narration))
+                                    {
+                                        <div class="panel-narration">
+                                            <h6 class="narration-title">旁白：</h6>
+                                            <p class="narration-text">
+                                                <i class="fas fa-quote-left me-2"></i>
+                                                @panel.Narration
+                                            </p>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="comic-metadata mt-4">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>生成参数：</h6>
+                            <ul class="list-unstyled">
+                                <li><strong>年龄组：</strong> @GetAgeGroupDisplay(Comic.Metadata.GenerationOptions.AgeGroup)</li>
+                                <li><strong>面板数量：</strong> @Comic.Panels.Count</li>
+                                <li><strong>视觉风格：</strong> @GetVisualStyleDisplay(Comic.Metadata.GenerationOptions.VisualStyle)</li>
+                                <li><strong>语言：</strong> @GetLanguageDisplay(Comic.Metadata.GenerationOptions.Language)</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <h6>标签：</h6>
+                            <div class="tags-container">
+                                @foreach (var tag in Comic.Metadata.Tags)
+                                {
+                                    <span class="badge bg-secondary me-1 mb-1">@tag</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+    else if (IsLoading)
+    {
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">加载中...</span>
+            </div>
+            <p class="mt-3 text-muted">正在生成漫画，请稍候...</p>
+        </div>
+    }
+    else
+    {
+        <div class="empty-state text-center py-5">
+            <i class="fas fa-image fa-4x text-muted mb-3"></i>
+            <h4 class="text-muted">暂无漫画</h4>
+            <p class="text-muted">请输入数学概念来生成您的第一个漫画</p>
+        </div>
+    }
+</div>
+
+<!-- 图片模态框 -->
+<div class="modal fade" id="imageModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">面板 @selectedPanel?.Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-center">
+                @if (selectedPanel != null && !string.IsNullOrEmpty(selectedPanel.ImageUrl))
+                {
+                    <img src="@selectedPanel.ImageUrl" class="img-fluid" alt="Panel @selectedPanel.Order" />
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public MultiPanelComic? Comic { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public EventCallback<MultiPanelComic> OnSave { get; set; }
+    [Parameter] public EventCallback<MultiPanelComic> OnShare { get; set; }
+    [Parameter] public EventCallback<(MultiPanelComic Comic, ExportFormat Format)> OnExport { get; set; }
+
+    private ComicPanel? selectedPanel;
+
+    private int GetColumnSize()
+    {
+        if (Comic == null) return 12;
+        
+        return Comic.Panels.Count switch
+        {
+            3 => 4,  // 3列布局
+            4 => 6,  // 2列布局
+            5 => 6,  // 2列布局（最后一个占满）
+            6 => 4,  // 3列布局
+            _ => 6   // 默认2列
+        };
+    }
+
+    private async Task SaveComic()
+    {
+        if (Comic != null)
+        {
+            await OnSave.InvokeAsync(Comic);
+        }
+    }
+
+    private async Task ShareComic()
+    {
+        if (Comic != null)
+        {
+            await OnShare.InvokeAsync(Comic);
+        }
+    }
+
+    private async Task ExportComic(ExportFormat format)
+    {
+        if (Comic != null)
+        {
+            await OnExport.InvokeAsync((Comic, format));
+        }
+    }
+
+    private async Task ShowImageModal(ComicPanel panel)
+    {
+        selectedPanel = panel;
+        var modalElement = await JSRuntime.InvokeAsync<IJSObjectReference>("document.getElementById", "imageModal");
+        var modalInstance = await JSRuntime.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", modalElement);
+        await modalInstance.InvokeVoidAsync("show");
+    }
+
+    private string GetAgeGroupDisplay(AgeGroup ageGroup)
+    {
+        return ageGroup switch
+        {
+            AgeGroup.Preschool => "学龄前 (3-5岁)",
+            AgeGroup.Elementary => "小学 (6-11岁)",
+            AgeGroup.MiddleSchool => "中学 (12-14岁)",
+            AgeGroup.HighSchool => "高中 (15-18岁)",
+            _ => "未知"
+        };
+    }
+
+    private string GetVisualStyleDisplay(VisualStyle style)
+    {
+        return style switch
+        {
+            VisualStyle.Cartoon => "卡通风格",
+            VisualStyle.Colorful => "多彩风格",
+            VisualStyle.Realistic => "写实风格",
+            VisualStyle.Minimalist => "简约风格",
+            _ => "未知"
+        };
+    }
+
+    private string GetLanguageDisplay(Language language)
+    {
+        return language switch
+        {
+            Language.Chinese => "中文",
+            Language.English => "English",
+            _ => "未知"
+        };
+    }
+
+    public enum ExportFormat
+    {
+        JSON,
+        PDF,
+        ZIP
+    }
+}

@@ -1,0 +1,228 @@
+@using MathComicGenerator.Shared.Models
+@using MathComicGenerator.Shared.Services
+@using System.ComponentModel.DataAnnotations
+@inject IJSRuntime JSRuntime
+
+<div class="math-input-container">
+    <div class="card">
+        <div class="card-header">
+            <h3 class="card-title">数学概念输入</h3>
+            <p class="card-subtitle">请输入您想要生成漫画的数学概念</p>
+        </div>
+        
+        <div class="card-body">
+            <EditForm Model="@inputModel" OnValidSubmit="@HandleSubmit">
+                <DataAnnotationsValidator />
+                
+                <div class="form-group">
+                    <label for="mathConcept" class="form-label">数学概念</label>
+                    <InputTextArea @bind-Value="inputModel.MathConcept" 
+                                   class="@GetInputCssClass()"
+                                   id="mathConcept"
+                                   placeholder="例如：加法运算、几何图形、分数概念..."
+                                   rows="3"
+                                   maxlength="200" />
+                    <ValidationMessage For="@(() => inputModel.MathConcept)" />
+                    @if (!string.IsNullOrEmpty(validationMessage))
+                    {
+                        <div class="invalid-feedback d-block">@validationMessage</div>
+                    }
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="ageGroup" class="form-label">目标年龄组</label>
+                            <InputSelect @bind-Value="inputModel.Options.AgeGroup" class="form-select" id="ageGroup">
+                                <option value="@AgeGroup.Preschool">学龄前 (3-5岁)</option>
+                                <option value="@AgeGroup.Elementary">小学 (6-11岁)</option>
+                                <option value="@AgeGroup.MiddleSchool">中学 (12-14岁)</option>
+                                <option value="@AgeGroup.HighSchool">高中 (15-18岁)</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="panelCount" class="form-label">面板数量</label>
+                            <InputNumber @bind-Value="inputModel.Options.PanelCount" 
+                                       class="form-control" 
+                                       id="panelCount"
+                                       min="3" 
+                                       max="6" />
+                            <small class="form-text text-muted">3-6个面板</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="visualStyle" class="form-label">视觉风格</label>
+                            <InputSelect @bind-Value="inputModel.Options.VisualStyle" class="form-select" id="visualStyle">
+                                <option value="@VisualStyle.Cartoon">卡通风格</option>
+                                <option value="@VisualStyle.Colorful">多彩风格</option>
+                                <option value="@VisualStyle.Realistic">写实风格</option>
+                                <option value="@VisualStyle.Minimalist">简约风格</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="language" class="form-label">语言</label>
+                            <InputSelect @bind-Value="inputModel.Options.Language" class="form-select" id="language">
+                                <option value="@Language.Chinese">中文</option>
+                                <option value="@Language.English">English</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                </div>
+
+                @if (suggestions.Any())
+                {
+                    <div class="alert alert-info">
+                        <h6>建议：</h6>
+                        <ul class="mb-0">
+                            @foreach (var suggestion in suggestions)
+                            {
+                                <li>@suggestion</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary" disabled="@isGenerating">
+                        @if (isGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2" role="status"></span>
+                            <span>生成中...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-magic me-2"></i>
+                            <span>生成漫画</span>
+                        }
+                    </button>
+                    
+                    <button type="button" class="btn btn-secondary ms-2" @onclick="ResetForm">
+                        <i class="fas fa-undo me-2"></i>
+                        重置
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<ComicGenerationRequest> OnSubmit { get; set; }
+    [Parameter] public bool IsGenerating { get; set; }
+
+    private MathInputModel inputModel = new();
+    private MathConceptValidator validator = new();
+    private GenerationOptionsProcessor optionsProcessor = new();
+    private string validationMessage = string.Empty;
+    private List<string> suggestions = new();
+    private bool isGenerating;
+
+    protected override void OnInitialized()
+    {
+        // 设置默认值
+        inputModel.Options = new GenerationOptions
+        {
+            AgeGroup = AgeGroup.Elementary,
+            PanelCount = 4,
+            VisualStyle = VisualStyle.Cartoon,
+            Language = Language.Chinese
+        };
+    }
+
+    protected override void OnParametersSet()
+    {
+        isGenerating = IsGenerating;
+    }
+
+    private async Task HandleSubmit()
+    {
+        validationMessage = string.Empty;
+        suggestions.Clear();
+
+        // 验证数学概念
+        var conceptValidation = validator.ValidateInput(inputModel.MathConcept);
+        if (!conceptValidation.IsValid)
+        {
+            validationMessage = conceptValidation.ErrorMessage;
+            suggestions = conceptValidation.Suggestions;
+            StateHasChanged();
+            return;
+        }
+
+        // 验证生成选项
+        var optionsValidation = optionsProcessor.ValidateOptions(inputModel.Options);
+        if (!optionsValidation.IsValid)
+        {
+            validationMessage = optionsValidation.ErrorMessage;
+            suggestions = optionsValidation.Suggestions;
+            StateHasChanged();
+            return;
+        }
+
+        // 应用年龄组调整
+        var adjustedOptions = optionsProcessor.AdjustForAgeGroup(inputModel.Options, inputModel.Options.AgeGroup);
+        
+        // 创建数学概念对象
+        var mathConcept = validator.ParseMathConcept(inputModel.MathConcept);
+
+        // 创建生成请求
+        var request = new ComicGenerationRequest
+        {
+            MathConcept = mathConcept,
+            Options = adjustedOptions
+        };
+
+        // 触发提交事件
+        await OnSubmit.InvokeAsync(request);
+    }
+
+    private void ResetForm()
+    {
+        inputModel = new MathInputModel();
+        inputModel.Options = new GenerationOptions
+        {
+            AgeGroup = AgeGroup.Elementary,
+            PanelCount = 4,
+            VisualStyle = VisualStyle.Cartoon,
+            Language = Language.Chinese
+        };
+        validationMessage = string.Empty;
+        suggestions.Clear();
+        StateHasChanged();
+    }
+
+    private bool HasValidationError(string fieldName)
+    {
+        return !string.IsNullOrEmpty(validationMessage) && validationMessage.Contains(fieldName);
+    }
+
+    private string GetInputCssClass()
+    {
+        return HasValidationError("MathConcept") ? "form-control is-invalid" : "form-control";
+    }
+
+    public class MathInputModel
+    {
+        [Required(ErrorMessage = "请输入数学概念")]
+        [StringLength(200, ErrorMessage = "数学概念不能超过200个字符")]
+        public string MathConcept { get; set; } = string.Empty;
+        
+        public GenerationOptions Options { get; set; } = new();
+    }
+
+    public class ComicGenerationRequest
+    {
+        public MathConcept MathConcept { get; set; } = new();
+        public GenerationOptions Options { get; set; } = new();
+    }
+}

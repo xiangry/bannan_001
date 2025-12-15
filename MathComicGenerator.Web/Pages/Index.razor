@@ -1,0 +1,297 @@
+﻿@page "/"
+@using MathComicGenerator.Shared.Models
+@using MathComicGenerator.Web.Components
+@inject HttpClient Http
+@inject IJSRuntime JSRuntime
+@inject NavigationManager NavigationManager
+
+<PageTitle>数学漫画生成器</PageTitle>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="text-center mb-4">
+                <h1 class="display-4 text-primary">
+                    <i class="fas fa-magic me-3"></i>
+                    数学漫画生成器
+                </h1>
+                <p class="lead text-muted">让数学学习变得生动有趣</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 输入区域 -->
+        <div class="col-lg-4 mb-4">
+            <MathInputComponent OnSubmit="HandleComicGeneration" IsGenerating="isGenerating" />
+        </div>
+
+        <!-- 漫画显示区域 -->
+        <div class="col-lg-8 mb-4">
+            <ComicDisplayComponent Comic="currentComic" 
+                                 IsLoading="isGenerating"
+                                 OnSave="HandleSaveComic"
+                                 OnShare="HandleShareComic"
+                                 OnExport="HandleExportComic" />
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 历史记录区域 -->
+        <div class="col-12">
+            <HistoryComponent ComicHistory="comicHistory"
+                            IsLoading="isLoadingHistory"
+                            OnRefresh="LoadComicHistory"
+                            OnView="HandleViewComic"
+                            OnShare="HandleShareComic"
+                            OnDelete="HandleDeleteComic" />
+        </div>
+    </div>
+</div>
+
+<!-- 通知Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+    <div id="notificationToast" class="toast" role="alert">
+        <div class="toast-header">
+            <i class="fas fa-info-circle text-primary me-2"></i>
+            <strong class="me-auto">通知</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast"></button>
+        </div>
+        <div class="toast-body">
+            @notificationMessage
+        </div>
+    </div>
+</div>
+
+@code {
+    private MultiPanelComic? currentComic;
+    private List<ComicMetadata> comicHistory = new();
+    private bool isGenerating = false;
+    private bool isLoadingHistory = false;
+    private string notificationMessage = string.Empty;
+
+    protected override Task OnInitializedAsync()
+    {
+        // 在预渲染阶段不加载历史记录，避免JavaScript互操作错误
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadComicHistory();
+        }
+    }
+
+    private async Task HandleComicGeneration(MathInputComponent.ComicGenerationRequest request)
+    {
+        try
+        {
+            isGenerating = true;
+            StateHasChanged();
+
+            // 调用API生成漫画
+            var response = await Http.PostAsJsonAsync("/api/comic/generate", new
+            {
+                MathConcept = request.MathConcept.Topic,
+                Options = request.Options
+            });
+
+            if (response.IsSuccessStatusCode)
+            {
+                currentComic = await response.Content.ReadFromJsonAsync<MultiPanelComic>();
+                await ShowNotification("漫画生成成功！");
+                await LoadComicHistory(); // 刷新历史记录
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                await ShowNotification($"生成失败：{errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"生成过程中发生错误：{ex.Message}");
+        }
+        finally
+        {
+            isGenerating = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleSaveComic(MultiPanelComic comic)
+    {
+        try
+        {
+            // 漫画已经在生成时自动保存，这里只需要显示通知
+            await ShowNotification("漫画已保存到历史记录");
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"保存失败：{ex.Message}");
+        }
+    }
+
+    private async Task HandleShareComic(MultiPanelComic comic)
+    {
+        try
+        {
+            // 实现分享功能 - 这里可以复制链接到剪贴板
+            var shareUrl = $"{NavigationManager.BaseUri}comic/{comic.Id}";
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            await ShowNotification("分享链接已复制到剪贴板");
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"分享失败：{ex.Message}");
+        }
+    }
+
+    private async Task HandleShareComic(ComicMetadata comic)
+    {
+        try
+        {
+            // 从历史记录分享
+            var shareUrl = $"{NavigationManager.BaseUri}comic/{comic.MathConcept}";
+            await JSRuntime.InvokeVoidAsync("navigator.clipboard.writeText", shareUrl);
+            await ShowNotification("分享链接已复制到剪贴板");
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"分享失败：{ex.Message}");
+        }
+    }
+
+    private async Task HandleExportComic((MultiPanelComic Comic, ComicDisplayComponent.ExportFormat Format) exportRequest)
+    {
+        try
+        {
+            var response = await Http.GetAsync($"/api/comic/{exportRequest.Comic.Id}/export?format={exportRequest.Format}");
+            
+            if (response.IsSuccessStatusCode)
+            {
+                var content = await response.Content.ReadAsByteArrayAsync();
+                var fileName = $"comic_{exportRequest.Comic.Id}.{exportRequest.Format.ToString().ToLower()}";
+                
+                // 触发文件下载
+                await JSRuntime.InvokeVoidAsync("downloadFile", fileName, Convert.ToBase64String(content));
+                await ShowNotification("导出成功");
+            }
+            else
+            {
+                await ShowNotification("导出失败");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"导出失败：{ex.Message}");
+        }
+    }
+
+    private async Task LoadComicHistory()
+    {
+        try
+        {
+            isLoadingHistory = true;
+            StateHasChanged();
+
+            var response = await Http.GetAsync("/api/comic");
+            if (response.IsSuccessStatusCode)
+            {
+                comicHistory = await response.Content.ReadFromJsonAsync<List<ComicMetadata>>() ?? new();
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"加载历史记录失败：{ex.Message}");
+        }
+        finally
+        {
+            isLoadingHistory = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleViewComic(ComicMetadata comic)
+    {
+        try
+        {
+            // 加载完整的漫画数据
+            var response = await Http.GetAsync($"/api/comic/{comic.MathConcept}");
+            if (response.IsSuccessStatusCode)
+            {
+                currentComic = await response.Content.ReadFromJsonAsync<MultiPanelComic>();
+                StateHasChanged();
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"加载漫画失败：{ex.Message}");
+        }
+    }
+
+    private async Task HandleDeleteComic(ComicMetadata comic)
+    {
+        try
+        {
+            var response = await Http.DeleteAsync($"/api/comic/{comic.MathConcept}");
+            if (response.IsSuccessStatusCode)
+            {
+                await ShowNotification("漫画已删除");
+                await LoadComicHistory(); // 刷新历史记录
+            }
+            else
+            {
+                await ShowNotification("删除失败");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"删除失败：{ex.Message}");
+        }
+    }
+
+    private async Task ShowNotification(string message)
+    {
+        notificationMessage = message;
+        StateHasChanged();
+        
+        // 只在渲染完成后调用JavaScript
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("showToast", "notificationToast");
+        }
+        catch (InvalidOperationException)
+        {
+            // 在预渲染阶段忽略JavaScript调用错误
+        }
+    }
+}
+
+<script>
+    window.showToast = (toastId) => {
+        const toastElement = document.getElementById(toastId);
+        if (toastElement) {
+            // 简单的显示/隐藏实现，不依赖Bootstrap JavaScript
+            toastElement.style.display = 'block';
+            toastElement.classList.add('show');
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                toastElement.style.display = 'none';
+                toastElement.classList.remove('show');
+            }, 3000);
+        }
+    };
+
+    window.downloadFile = (fileName, base64Content) => {
+        const link = document.createElement('a');
+        link.href = 'data:application/octet-stream;base64,' + base64Content;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+</script>
