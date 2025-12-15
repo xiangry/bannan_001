@@ -1,0 +1,320 @@
+@using MathComicGenerator.Shared.Models
+@inject IJSRuntime JSRuntime
+
+<div class="prompt-editor-container">
+    <div class="card">
+        <div class="card-header">
+            <h4 class="card-title">
+                <i class="fas fa-edit me-2"></i>
+                提示词编辑器
+            </h4>
+            <p class="card-subtitle text-muted">
+                您可以编辑AI生成的提示词，然后生成漫画图片
+            </p>
+        </div>
+        
+        <div class="card-body">
+            @if (PromptResponse != null)
+            {
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label for="promptText" class="form-label fw-bold">生成的提示词</label>
+                        <div class="btn-group btn-group-sm">
+                            <button type="button" class="btn btn-outline-secondary" @onclick="OptimizePrompt" disabled="@isOptimizing">
+                                @if (isOptimizing)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1"></span>
+                                }
+                                <i class="fas fa-magic me-1"></i>
+                                优化提示词
+                            </button>
+                            <button type="button" class="btn btn-outline-info" @onclick="ResetPrompt">
+                                <i class="fas fa-undo me-1"></i>
+                                重置
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <textarea @bind="editedPrompt" 
+                              @bind:event="oninput"
+                              @onblur="ValidatePrompt"
+                              class="@GetPromptTextAreaClass()"
+                              id="promptText"
+                              rows="8"
+                              placeholder="在这里编辑您的漫画创作提示词..."></textarea>
+                    
+                    <div class="form-text">
+                        <small class="text-muted">
+                            字符数: @editedPrompt.Length / 2000
+                        </small>
+                    </div>
+                    
+                    @if (!string.IsNullOrEmpty(validationMessage))
+                    {
+                        <div class="invalid-feedback d-block">
+                            @validationMessage
+                        </div>
+                    }
+                </div>
+
+                @if (suggestions.Any())
+                {
+                    <div class="alert alert-info">
+                        <h6><i class="fas fa-lightbulb me-2"></i>改进建议：</h6>
+                        <ul class="mb-0">
+                            @foreach (var suggestion in suggestions)
+                            {
+                                <li>@suggestion</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">年龄组</label>
+                        <select @bind="PromptResponse.Options.AgeGroup" class="form-select">
+                            <option value="@AgeGroup.Preschool">学龄前 (3-5岁)</option>
+                            <option value="@AgeGroup.Elementary">小学 (6-11岁)</option>
+                            <option value="@AgeGroup.MiddleSchool">中学 (12-14岁)</option>
+                            <option value="@AgeGroup.HighSchool">高中 (15-18岁)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">面板数量</label>
+                        <input type="number" @bind="PromptResponse.Options.PanelCount" 
+                               class="form-control" min="3" max="6" />
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">视觉风格</label>
+                        <select @bind="PromptResponse.Options.VisualStyle" class="form-select">
+                            <option value="@VisualStyle.Cartoon">卡通风格</option>
+                            <option value="@VisualStyle.Colorful">多彩风格</option>
+                            <option value="@VisualStyle.Realistic">写实风格</option>
+                            <option value="@VisualStyle.Minimalist">简约风格</option>
+                        </select>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <label class="form-label">语言</label>
+                        <select @bind="PromptResponse.Options.Language" class="form-select">
+                            <option value="@Language.Chinese">中文</option>
+                            <option value="@Language.English">English</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" 
+                            class="btn btn-primary" 
+                            @onclick="GenerateComic" 
+                            disabled="@(IsGenerating || !IsPromptValid())">
+                        @if (IsGenerating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-2"></span>
+                            <span>生成漫画中...</span>
+                        }
+                        else
+                        {
+                            <i class="fas fa-image me-2"></i>
+                            <span>生成漫画图片</span>
+                        }
+                    </button>
+                    
+                    <button type="button" class="btn btn-secondary" @onclick="GoBack">
+                        <i class="fas fa-arrow-left me-2"></i>
+                        返回输入
+                    </button>
+                </div>
+            }
+            else
+            {
+                <div class="text-center text-muted">
+                    <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                    <p>正在生成提示词...</p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public PromptGenerationResponse? PromptResponse { get; set; }
+    [Parameter] public bool IsGenerating { get; set; }
+    [Parameter] public EventCallback<ComicImageGenerationRequest> OnGenerateComic { get; set; }
+    [Parameter] public EventCallback OnGoBack { get; set; }
+
+    private string editedPrompt = string.Empty;
+    private string originalPrompt = string.Empty;
+    private string validationMessage = string.Empty;
+    private List<string> suggestions = new();
+    private bool isOptimizing = false;
+
+    protected override void OnParametersSet()
+    {
+        if (PromptResponse != null && editedPrompt != PromptResponse.GeneratedPrompt)
+        {
+            editedPrompt = PromptResponse.GeneratedPrompt;
+            originalPrompt = PromptResponse.GeneratedPrompt;
+            suggestions = PromptResponse.Suggestions;
+            validationMessage = string.Empty;
+        }
+    }
+
+    private async Task GenerateComic()
+    {
+        if (!IsPromptValid()) return;
+
+        var request = new ComicImageGenerationRequest
+        {
+            PromptId = PromptResponse?.Id ?? string.Empty,
+            EditedPrompt = editedPrompt,
+            Options = PromptResponse?.Options ?? new GenerationOptions()
+        };
+
+        await OnGenerateComic.InvokeAsync(request);
+    }
+
+    private async Task GoBack()
+    {
+        await OnGoBack.InvokeAsync();
+    }
+
+    private async Task OptimizePrompt()
+    {
+        if (PromptResponse == null) return;
+
+        try
+        {
+            isOptimizing = true;
+            StateHasChanged();
+
+            // 这里应该调用API优化提示词
+            // 暂时模拟优化过程
+            await Task.Delay(2000);
+            
+            // 实际实现中应该调用 /api/comic/optimize-prompt
+            // var optimizedPrompt = await Http.PostAsJsonAsync("/api/comic/optimize-prompt", new { Prompt = editedPrompt, Options = PromptResponse.Options });
+            
+            // 模拟优化结果
+            if (editedPrompt.Length < 100)
+            {
+                editedPrompt += "\n\n[优化建议] 添加更多视觉细节描述，包括角色表情、场景布置和色彩搭配，使漫画更加生动有趣。";
+            }
+            
+            await ValidatePrompt();
+        }
+        catch (Exception ex)
+        {
+            validationMessage = $"优化失败：{ex.Message}";
+        }
+        finally
+        {
+            isOptimizing = false;
+            StateHasChanged();
+        }
+    }
+
+    private void ResetPrompt()
+    {
+        editedPrompt = originalPrompt;
+        validationMessage = string.Empty;
+        suggestions = PromptResponse?.Suggestions ?? new List<string>();
+        StateHasChanged();
+    }
+
+    private async Task ValidatePrompt()
+    {
+        validationMessage = string.Empty;
+        suggestions.Clear();
+
+        if (string.IsNullOrWhiteSpace(editedPrompt))
+        {
+            validationMessage = "提示词不能为空";
+            return;
+        }
+
+        if (editedPrompt.Length < 10)
+        {
+            validationMessage = "提示词太短，请提供更详细的描述";
+            suggestions.Add("添加更多关于漫画风格、角色和场景的描述");
+        }
+        else if (editedPrompt.Length > 2000)
+        {
+            validationMessage = "提示词太长，请简化描述";
+            suggestions.Add("保留核心要素，删除不必要的细节");
+        }
+
+        // 检查是否包含数学相关内容
+        var mathKeywords = new[] { "数学", "计算", "公式", "图形", "数字", "运算", "方程", "几何", "代数", "统计" };
+        if (!mathKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            suggestions.Add("建议在提示词中明确包含数学概念相关的关键词");
+        }
+
+        // 检查是否包含漫画相关描述
+        var comicKeywords = new[] { "漫画", "面板", "角色", "对话", "场景", "故事", "情节" };
+        if (!comicKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
+        {
+            suggestions.Add("建议添加漫画结构和视觉元素的描述");
+        }
+
+        StateHasChanged();
+    }
+
+    private bool IsPromptValid()
+    {
+        return !string.IsNullOrWhiteSpace(editedPrompt) && 
+               editedPrompt.Length >= 10 && 
+               editedPrompt.Length <= 2000 &&
+               string.IsNullOrEmpty(validationMessage);
+    }
+
+    private string GetPromptTextAreaClass()
+    {
+        var baseClass = "form-control";
+        
+        if (!string.IsNullOrEmpty(validationMessage))
+        {
+            baseClass += " is-invalid";
+        }
+        else if (!string.IsNullOrWhiteSpace(editedPrompt) && IsPromptValid())
+        {
+            baseClass += " is-valid";
+        }
+
+        return baseClass;
+    }
+}
+
+<style>
+    .prompt-editor-container .card {
+        border: 1px solid #e3e6f0;
+        box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    }
+
+    .prompt-editor-container .card-header {
+        background-color: #f8f9fc;
+        border-bottom: 1px solid #e3e6f0;
+    }
+
+    .prompt-editor-container textarea {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        line-height: 1.5;
+        resize: vertical;
+    }
+
+    .prompt-editor-container .btn-group-sm .btn {
+        font-size: 0.875rem;
+    }
+
+    .prompt-editor-container .alert-info {
+        background-color: #d1ecf1;
+        border-color: #bee5eb;
+        color: #0c5460;
+    }
+</style>

@@ -14,6 +14,7 @@ builder.Services.AddHttpClient<IGeminiAPIService, GeminiAPIService>();
 // Register services
 builder.Services.AddScoped<IGeminiAPIService, GeminiAPIService>();
 builder.Services.AddScoped<IComicGenerationService, ComicGenerationService>();
+builder.Services.AddScoped<IPromptGenerationService, MathComicGenerator.Shared.Services.PromptGenerationService>();
 builder.Services.AddScoped<IStorageService, StorageService>();
 builder.Services.AddSingleton<ResourceManagementService>();
 builder.Services.AddSingleton<ErrorLoggingService>();

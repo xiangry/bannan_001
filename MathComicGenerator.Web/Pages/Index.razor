@@ -21,19 +21,41 @@
     </div>
 
     <div class="row">
-        <!-- 输入区域 -->
-        <div class="col-lg-4 mb-4">
-            <MathInputComponent OnSubmit="HandleComicGeneration" IsGenerating="isGenerating" />
-        </div>
+        @if (currentStep == GenerationStep.Input)
+        {
+            <!-- 输入区域 -->
+            <div class="col-lg-4 mb-4">
+                <MathInputComponent OnSubmit="HandlePromptGeneration" IsGenerating="isGeneratingPrompt" />
+            </div>
 
-        <!-- 漫画显示区域 -->
-        <div class="col-lg-8 mb-4">
-            <ComicDisplayComponent Comic="currentComic" 
-                                 IsLoading="isGenerating"
-                                 OnSave="HandleSaveComic"
-                                 OnShare="HandleShareComic"
-                                 OnExport="HandleExportComic" />
-        </div>
+            <!-- 漫画显示区域 -->
+            <div class="col-lg-8 mb-4">
+                <ComicDisplayComponent Comic="currentComic" 
+                                     IsLoading="isGeneratingComic"
+                                     OnSave="HandleSaveComic"
+                                     OnShare="HandleShareComic"
+                                     OnExport="HandleExportComic" />
+            </div>
+        }
+        else if (currentStep == GenerationStep.PromptEdit)
+        {
+            <!-- 提示词编辑区域 -->
+            <div class="col-lg-6 mb-4">
+                <PromptEditorComponent PromptResponse="currentPromptResponse"
+                                     IsGenerating="isGeneratingComic"
+                                     OnGenerateComic="HandleComicGeneration"
+                                     OnGoBack="HandleGoBackToInput" />
+            </div>
+
+            <!-- 漫画显示区域 -->
+            <div class="col-lg-6 mb-4">
+                <ComicDisplayComponent Comic="currentComic" 
+                                     IsLoading="isGeneratingComic"
+                                     OnSave="HandleSaveComic"
+                                     OnShare="HandleShareComic"
+                                     OnExport="HandleExportComic" />
+            </div>
+        }
     </div>
 
     <div class="row">
@@ -65,10 +87,19 @@
 
 @code {
     private MultiPanelComic? currentComic;
+    private PromptGenerationResponse? currentPromptResponse;
     private List<ComicMetadata> comicHistory = new();
-    private bool isGenerating = false;
+    private GenerationStep currentStep = GenerationStep.Input;
+    private bool isGeneratingPrompt = false;
+    private bool isGeneratingComic = false;
     private bool isLoadingHistory = false;
     private string notificationMessage = string.Empty;
+
+    public enum GenerationStep
+    {
+        Input,
+        PromptEdit
+    }
 
     protected override Task OnInitializedAsync()
     {
@@ -84,19 +115,52 @@
         }
     }
 
-    private async Task HandleComicGeneration(MathInputComponent.ComicGenerationRequest request)
+    private async Task HandlePromptGeneration(MathInputComponent.ComicGenerationRequest request)
     {
         try
         {
-            isGenerating = true;
+            isGeneratingPrompt = true;
             StateHasChanged();
 
-            // 调用API生成漫画
-            var response = await Http.PostAsJsonAsync("/api/comic/generate", new
+            // 第一步：生成提示词
+            var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", new
             {
                 MathConcept = request.MathConcept.Topic,
                 Options = request.Options
             });
+
+            if (response.IsSuccessStatusCode)
+            {
+                currentPromptResponse = await response.Content.ReadFromJsonAsync<PromptGenerationResponse>();
+                currentStep = GenerationStep.PromptEdit;
+                await ShowNotification("提示词生成成功！请编辑后生成漫画。");
+            }
+            else
+            {
+                var errorContent = await response.Content.ReadAsStringAsync();
+                await ShowNotification($"提示词生成失败：{errorContent}");
+            }
+        }
+        catch (Exception ex)
+        {
+            await ShowNotification($"生成提示词时发生错误：{ex.Message}");
+        }
+        finally
+        {
+            isGeneratingPrompt = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task HandleComicGeneration(ComicImageGenerationRequest request)
+    {
+        try
+        {
+            isGeneratingComic = true;
+            StateHasChanged();
+
+            // 第二步：根据提示词生成漫画
+            var response = await Http.PostAsJsonAsync("/api/comic/generate-from-prompt", request);
 
             if (response.IsSuccessStatusCode)
             {
@@ -107,18 +171,25 @@
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                await ShowNotification($"生成失败：{errorContent}");
+                await ShowNotification($"漫画生成失败：{errorContent}");
             }
         }
         catch (Exception ex)
         {
-            await ShowNotification($"生成过程中发生错误：{ex.Message}");
+            await ShowNotification($"生成漫画时发生错误：{ex.Message}");
         }
         finally
         {
-            isGenerating = false;
+            isGeneratingComic = false;
             StateHasChanged();
         }
+    }
+
+    private async Task HandleGoBackToInput()
+    {
+        currentStep = GenerationStep.Input;
+        currentPromptResponse = null;
+        StateHasChanged();
     }
 
     private async Task HandleSaveComic(MultiPanelComic comic)

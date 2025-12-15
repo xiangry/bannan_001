@@ -5,6 +5,7 @@ namespace MathComicGenerator.Shared.Interfaces;
 public interface IComicGenerationService
 {
     Task<MultiPanelComic> GenerateComicAsync(MathConcept concept, GenerationOptions options);
+    Task<MultiPanelComic> GenerateComicFromPromptAsync(string prompt, GenerationOptions options);
     ValidationResult ValidateConcept(string concept);
 }
 

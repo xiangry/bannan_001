@@ -77,6 +77,44 @@ public class ComicGenerationService : IComicGenerationService
         }
     }
 
+    public async Task<MultiPanelComic> GenerateComicFromPromptAsync(string prompt, GenerationOptions options)
+    {
+        _logger.LogInformation("Starting comic generation from custom prompt");
+
+        try
+        {
+            // 1. 验证面板数量
+            ValidatePanelCount(options.PanelCount);
+
+            // 2. 增强用户提示词
+            var enhancedPrompt = EnhanceUserPrompt(prompt, options);
+
+            // 3. 调用AI生成内容
+            var comicContent = await _geminiAPIService.GenerateComicContentAsync(enhancedPrompt);
+
+            // 4. 内容安全过滤
+            var filteredContent = ApplyContentSafetyFilter(comicContent);
+
+            // 5. 调整语言复杂度
+            var adjustedContent = AdjustLanguageComplexity(filteredContent, options.AgeGroup);
+
+            // 6. 确保面板数量正确
+            var finalContent = EnsurePanelCount(adjustedContent, options.PanelCount);
+
+            // 7. 创建最终的漫画对象（从提示词推断概念）
+            var inferredConcept = InferMathConceptFromPrompt(prompt);
+            var comic = CreateMultiPanelComic(finalContent, inferredConcept, options);
+
+            _logger.LogInformation("Comic generation from prompt completed successfully");
+            return comic;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating comic from prompt");
+            throw;
+        }
+    }
+
     public ValidationResult ValidateConcept(string concept)
     {
         return _validator.ValidateInput(concept);
@@ -364,6 +402,73 @@ public class ComicGenerationService : IComicGenerationService
                 Narration = "学习过程中，我们发现了更多有趣的数学规律。"
             };
         }
+    }
+
+    private string EnhanceUserPrompt(string userPrompt, GenerationOptions options)
+    {
+        var ageGroupDescription = GetAgeGroupDescription(options.AgeGroup);
+        var visualStyleDescription = GetVisualStyleDescription(options.VisualStyle);
+        var languageInstruction = GetLanguageInstruction(options.Language);
+
+        return $@"
+基于以下用户提示词，为{ageGroupDescription}创建一个{options.PanelCount}格教育漫画：
+
+用户提示词：
+{userPrompt}
+
+技术要求：
+1. 创建恰好{options.PanelCount}个连续的漫画面板
+2. {visualStyleDescription}
+3. 内容必须适合儿童，积极正面，无暴力或恐怖元素
+4. {languageInstruction}
+5. 确保内容具有教育价值，特别是数学学习方面
+6. 包含有趣的角色和引人入胜的故事情节
+7. 每个面板都要推进故事，帮助理解相关概念
+
+请基于用户的创意想法，创造一个既有趣又有教育意义的漫画故事。";
+    }
+
+    private MathConcept InferMathConceptFromPrompt(string prompt)
+    {
+        // 从提示词中推断数学概念
+        var mathKeywords = new Dictionary<string, string>
+        {
+            { "加法", "加法运算" },
+            { "减法", "减法运算" },
+            { "乘法", "乘法运算" },
+            { "除法", "除法运算" },
+            { "分数", "分数概念" },
+            { "几何", "几何图形" },
+            { "圆形", "圆形和圆周" },
+            { "三角形", "三角形性质" },
+            { "正方形", "正方形和矩形" },
+            { "数字", "数字认知" },
+            { "计数", "数数和计数" },
+            { "比较", "数量比较" },
+            { "测量", "长度和测量" },
+            { "时间", "时间概念" },
+            { "钱币", "货币和购物" }
+        };
+
+        var detectedConcept = "数学概念"; // 默认值
+        var keywords = new List<string>();
+
+        foreach (var keyword in mathKeywords)
+        {
+            if (prompt.Contains(keyword.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                detectedConcept = keyword.Value;
+                keywords.Add(keyword.Key);
+                break;
+            }
+        }
+
+        return new MathConcept
+        {
+            Topic = detectedConcept,
+            Keywords = keywords,
+            Difficulty = DifficultyLevel.Beginner
+        };
     }
 
     private MultiPanelComic CreateMultiPanelComic(ComicContent content, MathConcept concept, GenerationOptions options)
