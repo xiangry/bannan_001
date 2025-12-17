@@ -10,14 +10,14 @@ namespace MathComicGenerator.Shared.Services;
 /// </summary>
 public class PromptGenerationService : IPromptGenerationService
 {
-    private readonly IGeminiAPIService _geminiService;
+    private readonly IDeepSeekAPIService _deepSeekService;
     private readonly ILogger<PromptGenerationService> _logger;
 
     public PromptGenerationService(
-        IGeminiAPIService geminiService,
+        IDeepSeekAPIService deepSeekService,
         ILogger<PromptGenerationService> logger)
     {
-        _geminiService = geminiService;
+        _deepSeekService = deepSeekService;
         _logger = logger;
     }
 
@@ -30,8 +30,7 @@ public class PromptGenerationService : IPromptGenerationService
             var systemPrompt = BuildSystemPrompt(options);
             var userPrompt = BuildUserPrompt(mathConcept, options);
 
-            var comicContent = await _geminiService.GenerateComicContentAsync(systemPrompt + "\n\n" + userPrompt);
-            var response = comicContent.Title + "\n" + string.Join("\n", comicContent.Panels.Select(p => p.ImageDescription));
+            var response = await _deepSeekService.GeneratePromptAsync(systemPrompt, userPrompt);
 
             var generatedPrompt = ExtractPromptFromResponse(response);
             var suggestions = ExtractSuggestionsFromResponse(response);
@@ -100,11 +99,10 @@ public class PromptGenerationService : IPromptGenerationService
         {
             _logger.LogInformation("Optimizing prompt");
 
-            var optimizationPrompt = BuildOptimizationPrompt(prompt, options);
-            var comicContent = await _geminiService.GenerateComicContentAsync(optimizationPrompt);
-            var response = comicContent.Title + "\n" + string.Join("\n", comicContent.Panels.Select(p => p.ImageDescription));
+            var optimizationInstructions = BuildOptimizationInstructions(options);
+            var optimizedPrompt = await _deepSeekService.OptimizePromptAsync(prompt, optimizationInstructions);
 
-            return ExtractOptimizedPromptFromResponse(response);
+            return ExtractOptimizedPromptFromResponse(optimizedPrompt);
         }
         catch (Exception ex)
         {
@@ -118,7 +116,7 @@ public class PromptGenerationService : IPromptGenerationService
     {
         var sb = new StringBuilder();
         
-        sb.AppendLine("你是一个专业的教育漫画提示词生成专家。你的任务是根据数学概念生成详细的漫画创作提示词。");
+        sb.AppendLine("你是一个专业的教育漫画提示词生成专家。你的任务是根据知识点生成详细的漫画创作提示词。");
         sb.AppendLine();
         sb.AppendLine("生成的提示词应该包含以下要素：");
         sb.AppendLine("1. 漫画整体结构和面板布局");
@@ -137,9 +135,17 @@ public class PromptGenerationService : IPromptGenerationService
 
         sb.AppendLine("请确保生成的提示词：");
         sb.AppendLine("- 适合目标年龄组的理解水平");
-        sb.AppendLine("- 包含准确的数学概念");
+        sb.AppendLine("- 包含准确的知识概念");
         sb.AppendLine("- 具有教育价值和趣味性");
         sb.AppendLine("- 描述清晰，便于图像生成");
+        sb.AppendLine();
+        sb.AppendLine("请按以下格式返回：");
+        sb.AppendLine("提示词: [详细的漫画创作提示词]");
+        sb.AppendLine();
+        sb.AppendLine("改进建议:");
+        sb.AppendLine("- [建议1]");
+        sb.AppendLine("- [建议2]");
+        sb.AppendLine("- [建议3]");
 
         return sb.ToString();
     }
@@ -148,9 +154,9 @@ public class PromptGenerationService : IPromptGenerationService
     {
         var sb = new StringBuilder();
         
-        sb.AppendLine($"请为以下数学概念生成漫画创作提示词：");
+        sb.AppendLine($"请为以下知识点生成漫画创作提示词：");
         sb.AppendLine();
-        sb.AppendLine($"数学概念: {mathConcept.Topic}");
+        sb.AppendLine($"知识点: {mathConcept.Topic}");
         
         if (mathConcept.Keywords.Any())
         {
@@ -164,23 +170,21 @@ public class PromptGenerationService : IPromptGenerationService
         return sb.ToString();
     }
 
-    private string BuildOptimizationPrompt(string originalPrompt, GenerationOptions options)
+    private string BuildOptimizationInstructions(GenerationOptions options)
     {
         var sb = new StringBuilder();
         
-        sb.AppendLine("请优化以下漫画创作提示词，使其更加清晰、具体和适合图像生成：");
-        sb.AppendLine();
-        sb.AppendLine("原始提示词:");
-        sb.AppendLine(originalPrompt);
-        sb.AppendLine();
         sb.AppendLine("优化要求:");
-        sb.AppendLine("1. 保持数学教育的核心内容");
-        sb.AppendLine("2. 增强视觉描述的具体性");
-        sb.AppendLine("3. 确保适合目标年龄组");
-        sb.AppendLine("4. 优化语言表达的清晰度");
-        sb.AppendLine("5. 保持合理的长度");
-        sb.AppendLine();
-        sb.AppendLine("请返回优化后的提示词：");
+        sb.AppendLine("1. 保持教育内容的核心价值");
+        sb.AppendLine("2. 增强视觉描述的具体性和生动性");
+        sb.AppendLine($"3. 确保适合{GetAgeGroupDescription(options.AgeGroup)}的理解水平");
+        sb.AppendLine("4. 优化语言表达的清晰度和准确性");
+        sb.AppendLine("5. 保持合理的长度，避免过于冗长");
+        sb.AppendLine($"6. 体现{GetVisualStyleDescription(options.VisualStyle)}的特点");
+        sb.AppendLine($"7. 确保{options.PanelCount}个面板的结构清晰");
+        sb.AppendLine("8. 增加角色互动和情感表达");
+        sb.AppendLine("9. 强化教育目标的实现");
+        sb.AppendLine("10. 提升整体的趣味性和吸引力");
 
         return sb.ToString();
     }

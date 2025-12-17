@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Components;
@@ -34,6 +35,13 @@ namespace MathComicGenerator.Web
             services.AddHttpClient("API", client =>
             {
                 client.BaseAddress = new Uri("https://localhost:7109/");
+            })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                var handler = new HttpClientHandler();
+                // 在开发环境中跳过SSL证书验证
+                handler.ServerCertificateCustomValidationCallback = (message, cert, chain, errors) => true;
+                return handler;
             });
             
             // 注册默认HttpClient

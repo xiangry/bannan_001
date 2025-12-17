@@ -44,8 +44,8 @@ public class MathConceptValidator : IMathConceptValidator
             return new ValidationResult
             {
                 IsValid = false,
-                ErrorMessage = "请输入数学知识点",
-                Suggestions = new List<string> { "例如：加法运算", "分数的概念", "几何图形" }
+                ErrorMessage = "请输入知识点内容",
+                Suggestions = new List<string> { "例如：加法运算", "光的折射", "历史事件", "语言语法" }
             };
         }
 
@@ -62,35 +62,19 @@ public class MathConceptValidator : IMathConceptValidator
             };
         }
 
-        // 检查是否包含数学相关内容
-        if (!IsMathematicalContent(cleanedInput))
+        // 检查是否包含不当内容（安全检查）
+        if (ContainsUnsafeContent(cleanedInput))
         {
             return new ValidationResult
             {
                 IsValid = false,
-                ErrorMessage = "请输入有效的数学概念",
+                ErrorMessage = "输入内容包含不适合儿童的内容，请提供教育性知识点",
                 Suggestions = new List<string> 
                 { 
-                    "加法和减法", 
-                    "几何图形认识", 
-                    "分数的基本概念",
-                    "时间的计算"
-                }
-            };
-        }
-
-        // 检查是否包含非数学内容
-        if (ContainsNonMathContent(cleanedInput))
-        {
-            return new ValidationResult
-            {
-                IsValid = false,
-                ErrorMessage = "检测到非数学相关内容，请提供数学概念",
-                Suggestions = new List<string> 
-                { 
-                    "数字运算", 
-                    "图形认识", 
-                    "测量概念" 
+                    "数学概念", 
+                    "科学原理", 
+                    "历史知识",
+                    "语言学习"
                 }
             };
         }
@@ -129,23 +113,38 @@ public class MathConceptValidator : IMathConceptValidator
     {
         if (string.IsNullOrWhiteSpace(invalidInput))
         {
-            return new List<string> { "例如：加法运算", "分数的概念", "几何图形" };
+            return new List<string> { 
+                "数学：加法运算、分数概念", 
+                "科学：光的折射、植物生长", 
+                "历史：古代文明、历史事件",
+                "语言：语法规则、词汇学习"
+            };
         }
 
         // 基于输入内容提供相关建议
         var suggestions = new List<string>();
         
-        if (invalidInput.Contains("数字") || invalidInput.Contains("number"))
+        if (invalidInput.Contains("数学") || invalidInput.Contains("math"))
         {
-            suggestions.AddRange(new[] { "数字的加减法", "数字的大小比较", "数字的认识" });
+            suggestions.AddRange(new[] { "加法运算", "几何图形", "分数概念", "时间计算" });
         }
-        else if (invalidInput.Contains("图") || invalidInput.Contains("shape"))
+        else if (invalidInput.Contains("科学") || invalidInput.Contains("science"))
         {
-            suggestions.AddRange(new[] { "几何图形认识", "图形的面积计算", "图形的周长" });
+            suggestions.AddRange(new[] { "光的折射", "植物生长", "化学反应", "物理现象" });
+        }
+        else if (invalidInput.Contains("历史") || invalidInput.Contains("history"))
+        {
+            suggestions.AddRange(new[] { "古代文明", "历史事件", "文化传统", "重要人物" });
+        }
+        else if (invalidInput.Contains("语言") || invalidInput.Contains("language"))
+        {
+            suggestions.AddRange(new[] { "语法规则", "词汇学习", "句型结构", "语言表达" });
         }
         else
         {
-            suggestions.AddRange(new[] { "加法和减法", "乘法口诀", "分数概念", "时间计算" });
+            suggestions.AddRange(new[] { 
+                "数学概念", "科学原理", "历史知识", "语言学习", "艺术技巧" 
+            });
         }
 
         return suggestions;
@@ -162,10 +161,20 @@ public class MathConceptValidator : IMathConceptValidator
         return cleaned;
     }
 
-    private bool ContainsNonMathContent(string content)
+    private bool ContainsUnsafeContent(string content)
     {
-        // 检查整个内容是否包含非数学关键词
-        return NonMathKeywords.Any(keyword => content.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        // 定义不适合儿童的内容关键词
+        var unsafeKeywords = new[]
+        {
+            "暴力", "打架", "伤害", "恐怖", "害怕", "死亡", "血", "武器",
+            "violence", "fight", "hurt", "scary", "fear", "death", "blood", "weapon",
+            "危险", "不安全", "坏人", "小偷", "犯罪", "毒品", "酒精",
+            "danger", "unsafe", "bad guy", "thief", "crime", "drug", "alcohol",
+            "性", "色情", "裸体", "sex", "porn", "nude"
+        };
+
+        // 检查是否包含不当内容关键词
+        return unsafeKeywords.Any(keyword => content.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 
     private DifficultyLevel DetermineDifficulty(string concept)

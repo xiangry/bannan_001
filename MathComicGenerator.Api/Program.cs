@@ -11,8 +11,12 @@ builder.Services.AddCors();
 // Add HTTP client for Gemini API
 builder.Services.AddHttpClient<IGeminiAPIService, GeminiAPIService>();
 
+// Add HTTP client for DeepSeek API
+builder.Services.AddHttpClient<IDeepSeekAPIService, DeepSeekAPIService>();
+
 // Register services
 builder.Services.AddScoped<IGeminiAPIService, GeminiAPIService>();
+builder.Services.AddScoped<IDeepSeekAPIService, DeepSeekAPIService>();
 builder.Services.AddScoped<IComicGenerationService, ComicGenerationService>();
 builder.Services.AddScoped<IPromptGenerationService, MathComicGenerator.Shared.Services.PromptGenerationService>();
 builder.Services.AddScoped<IStorageService, StorageService>();

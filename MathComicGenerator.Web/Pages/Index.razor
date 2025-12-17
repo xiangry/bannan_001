@@ -122,23 +122,44 @@
             isGeneratingPrompt = true;
             StateHasChanged();
 
+            await ShowNotification("开始生成提示词...");
+
             // 第一步：生成提示词
-            var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", new
+            var requestData = new
             {
                 MathConcept = request.MathConcept.Topic,
                 Options = request.Options
-            });
+            };
+
+            await ShowNotification($"发送请求：概念={request.MathConcept.Topic}");
+
+            var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", requestData);
+
+            await ShowNotification($"收到响应：状态码={response.StatusCode}");
 
             if (response.IsSuccessStatusCode)
             {
-                currentPromptResponse = await response.Content.ReadFromJsonAsync<PromptGenerationResponse>();
-                currentStep = GenerationStep.PromptEdit;
-                await ShowNotification("提示词生成成功！请编辑后生成漫画。");
+                var responseContent = await response.Content.ReadAsStringAsync();
+                await ShowNotification($"响应内容长度：{responseContent.Length}");
+
+                // 解析包装的响应格式
+                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PromptGenerationResponse>>();
+                
+                if (wrappedResponse?.Data != null)
+                {
+                    currentPromptResponse = wrappedResponse.Data;
+                    currentStep = GenerationStep.PromptEdit;
+                    await ShowNotification($"提示词生成成功！ID: {currentPromptResponse.Id}");
+                }
+                else
+                {
+                    await ShowNotification("提示词响应解析失败");
+                }
             }
             else
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
-                await ShowNotification($"提示词生成失败：{errorContent}");
+                await ShowNotification($"提示词生成失败：{response.StatusCode} - {errorContent}");
             }
         }
         catch (Exception ex)
@@ -164,9 +185,17 @@
 
             if (response.IsSuccessStatusCode)
             {
-                currentComic = await response.Content.ReadFromJsonAsync<MultiPanelComic>();
-                await ShowNotification("漫画生成成功！");
-                await LoadComicHistory(); // 刷新历史记录
+                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<MultiPanelComic>>();
+                if (wrappedResponse?.Data != null)
+                {
+                    currentComic = wrappedResponse.Data;
+                    await ShowNotification("漫画生成成功！");
+                    await LoadComicHistory(); // 刷新历史记录
+                }
+                else
+                {
+                    await ShowNotification("漫画响应解析失败");
+                }
             }
             else
             {
@@ -271,7 +300,8 @@
             var response = await Http.GetAsync("/api/comic");
             if (response.IsSuccessStatusCode)
             {
-                comicHistory = await response.Content.ReadFromJsonAsync<List<ComicMetadata>>() ?? new();
+                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<ComicMetadata>>>();
+                comicHistory = wrappedResponse?.Data ?? new();
             }
         }
         catch (Exception ex)
@@ -293,8 +323,12 @@
             var response = await Http.GetAsync($"/api/comic/{comic.MathConcept}");
             if (response.IsSuccessStatusCode)
             {
-                currentComic = await response.Content.ReadFromJsonAsync<MultiPanelComic>();
-                StateHasChanged();
+                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<MultiPanelComic>>();
+                if (wrappedResponse?.Data != null)
+                {
+                    currentComic = wrappedResponse.Data;
+                    StateHasChanged();
+                }
             }
         }
         catch (Exception ex)

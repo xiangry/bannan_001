@@ -6,8 +6,8 @@
 <div class="math-input-container">
     <div class="card">
         <div class="card-header">
-            <h3 class="card-title">数学概念输入</h3>
-            <p class="card-subtitle">请输入您想要生成漫画的数学概念</p>
+            <h3 class="card-title">知识点输入</h3>
+            <p class="card-subtitle">请输入您想要生成漫画的任意知识点</p>
         </div>
         
         <div class="card-body">
@@ -15,11 +15,11 @@
                 <DataAnnotationsValidator />
                 
                 <div class="form-group">
-                    <label for="mathConcept" class="form-label">数学概念</label>
+                    <label for="mathConcept" class="form-label">知识点内容</label>
                     <InputTextArea @bind-Value="inputModel.MathConcept" 
                                    class="@GetInputCssClass()"
                                    id="mathConcept"
-                                   placeholder="例如：加法运算、几何图形、分数概念..."
+                                   placeholder="请输入任意知识点，例如：加法运算、几何图形、分数概念、历史事件、科学原理等..."
                                    rows="3"
                                    maxlength="200" />
                     <ValidationMessage For="@(() => inputModel.MathConcept)" />
@@ -27,6 +27,7 @@
                     {
                         <div class="invalid-feedback d-block">@validationMessage</div>
                     }
+                    <small class="form-text text-muted">支持任意学科的知识点，不限于数学概念</small>
                 </div>
 
                 <div class="row">
@@ -149,37 +150,35 @@
         validationMessage = string.Empty;
         suggestions.Clear();
 
-        // 验证数学概念
-        var conceptValidation = validator.ValidateInput(inputModel.MathConcept);
-        if (!conceptValidation.IsValid)
+        // 基本验证：确保输入不为空
+        if (string.IsNullOrWhiteSpace(inputModel.MathConcept))
         {
-            validationMessage = conceptValidation.ErrorMessage;
-            suggestions = conceptValidation.Suggestions;
+            validationMessage = "请输入知识点内容";
             StateHasChanged();
             return;
         }
 
-        // 验证生成选项
-        var optionsValidation = optionsProcessor.ValidateOptions(inputModel.Options);
-        if (!optionsValidation.IsValid)
+        if (inputModel.MathConcept.Length > 200)
         {
-            validationMessage = optionsValidation.ErrorMessage;
-            suggestions = optionsValidation.Suggestions;
+            validationMessage = "知识点内容不能超过200个字符";
             StateHasChanged();
             return;
         }
 
-        // 应用年龄组调整
-        var adjustedOptions = optionsProcessor.AdjustForAgeGroup(inputModel.Options, inputModel.Options.AgeGroup);
-        
-        // 创建数学概念对象
-        var mathConcept = validator.ParseMathConcept(inputModel.MathConcept);
+        // 创建简单的数学概念对象，直接使用用户输入
+        var mathConcept = new MathConcept
+        {
+            Topic = inputModel.MathConcept.Trim(),
+            AgeGroup = inputModel.Options.AgeGroup,
+            Difficulty = DifficultyLevel.Elementary, // 默认初级难度
+            Keywords = new List<string>()
+        };
 
         // 创建生成请求
         var request = new ComicGenerationRequest
         {
             MathConcept = mathConcept,
-            Options = adjustedOptions
+            Options = inputModel.Options
         };
 
         // 触发提交事件
@@ -213,8 +212,8 @@
 
     public class MathInputModel
     {
-        [Required(ErrorMessage = "请输入数学概念")]
-        [StringLength(200, ErrorMessage = "数学概念不能超过200个字符")]
+        [Required(ErrorMessage = "请输入知识点内容")]
+        [StringLength(200, ErrorMessage = "知识点内容不能超过200个字符")]
         public string MathConcept { get; set; } = string.Empty;
         
         public GenerationOptions Options { get; set; } = new();
