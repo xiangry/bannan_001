@@ -1,0 +1,390 @@
+@page "/debug-test"
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Console Debug Test</PageTitle>
+
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1>Console Debug System Test</h1>
+            <p class="lead">This page tests the console debugging functionality. Open browser developer tools (F12) to see the console output.</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Controls</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label for="testInput" class="form-label">Test Input</label>
+                        <input type="text" 
+                               @bind="testInput" 
+                               @oninput="HandleTestInput"
+                               @onfocus="HandleTestFocus"
+                               @onblur="HandleTestBlur"
+                               class="form-control" 
+                               id="testInput" 
+                               placeholder="Type something to test input logging..." />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="testSelect" class="form-label">Test Selection</label>
+                        <select @bind="testSelection" @bind:after="HandleTestSelection" class="form-select" id="testSelect">
+                            <option value="">Choose an option...</option>
+                            <option value="option1">Option 1</option>
+                            <option value="option2">Option 2</option>
+                            <option value="option3">Option 3</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" 
+                                   @bind="testCheckbox" 
+                                   @bind:after="HandleTestCheckbox"
+                                   class="form-check-input" 
+                                   id="testCheckbox" />
+                            <label class="form-check-label" for="testCheckbox">
+                                Test Checkbox
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-primary" @onclick="TestInfoLog">
+                            Test Info Log
+                        </button>
+                        <button type="button" class="btn btn-warning" @onclick="TestWarningLog">
+                            Test Warning Log
+                        </button>
+                        <button type="button" class="btn btn-danger" @onclick="TestErrorLog">
+                            Test Error Log
+                        </button>
+                        <button type="button" class="btn btn-success" @onclick="TestApiLog">
+                            Test API Log
+                        </button>
+                        <button type="button" class="btn btn-info" @onclick="TestPerformanceLog">
+                            Test Performance Log
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Console Output Instructions</h5>
+                </div>
+                <div class="card-body">
+                    <ol>
+                        <li>Open browser developer tools (F12)</li>
+                        <li>Go to the Console tab</li>
+                        <li>Interact with the controls on the left</li>
+                        <li>Watch for UTF-8 formatted debug messages</li>
+                    </ol>
+
+                    <h6>Expected Log Categories:</h6>
+                    <ul>
+                        <li><strong>USER_INPUT:</strong> Text input changes</li>
+                        <li><strong>USER_SELECTION:</strong> Dropdown selections</li>
+                        <li><strong>USER_CLICK:</strong> Button clicks</li>
+                        <li><strong>USER_FOCUS/BLUR:</strong> Focus events</li>
+                        <li><strong>API_REQUEST/RESPONSE:</strong> Simulated API calls</li>
+                        <li><strong>PERFORMANCE:</strong> Timing measurements</li>
+                        <li><strong>VALIDATION:</strong> Form validation</li>
+                    </ul>
+
+                    <div class="alert alert-info">
+                        <strong>Note:</strong> All messages should display properly in UTF-8 encoding, 
+                        including Chinese characters and special symbols.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Test Results</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Current Input:</strong> @testInput</p>
+                    <p><strong>Current Selection:</strong> @testSelection</p>
+                    <p><strong>Checkbox State:</strong> @testCheckbox</p>
+                    <p><strong>Last Action:</strong> @lastAction</p>
+                    <p><strong>Test Count:</strong> @testCount</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string testInput = "";
+    private string testSelection = "";
+    private bool testCheckbox = false;
+    private string lastAction = "None";
+    private int testCount = 0;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                await JSRuntime.InvokeVoidAsync("logInfo", "Debug test page loaded", new {
+                    timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+                    userAgent = "Browser User Agent",
+                    testMessage = "Console debugging system initialized successfully! 控制台调试系统初始化成功！"
+                }, "DEBUG_TEST");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error initializing debug test: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task HandleTestInput(ChangeEventArgs e)
+    {
+        try
+        {
+            var value = e.Value?.ToString() ?? "";
+            await JSRuntime.InvokeVoidAsync("logUserInput", "test_input", value, null);
+            await JSRuntime.InvokeVoidAsync("logInfo", "Test input changed", new {
+                value,
+                length = value.Length,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "用户输入测试 - User input test"
+            }, "USER_INPUT");
+            
+            lastAction = $"Input changed to: {value}";
+            testCount++;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in test input handler", ex.Message, "INPUT_ERROR");
+        }
+    }
+
+    private async Task HandleTestFocus(FocusEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "Test input focused", new {
+                currentValue = testInput,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "焦点事件测试 - Focus event test"
+            }, "USER_FOCUS");
+            
+            lastAction = "Input focused";
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in focus handler", ex.Message, "FOCUS_ERROR");
+        }
+    }
+
+    private async Task HandleTestBlur(FocusEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "Test input blurred", new {
+                finalValue = testInput,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "失焦事件测试 - Blur event test"
+            }, "USER_BLUR");
+            
+            lastAction = "Input blurred";
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in blur handler", ex.Message, "BLUR_ERROR");
+        }
+    }
+
+    private async Task HandleTestSelection()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserSelection", "test_select", testSelection, new[] { "option1", "option2", "option3" });
+            await JSRuntime.InvokeVoidAsync("logInfo", "Test selection changed", new {
+                selectedValue = testSelection,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "选择事件测试 - Selection event test"
+            }, "USER_SELECTION");
+            
+            lastAction = $"Selection changed to: {testSelection}";
+            testCount++;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in selection handler", ex.Message, "SELECTION_ERROR");
+        }
+    }
+
+    private async Task HandleTestCheckbox()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserSelection", "test_checkbox", testCheckbox.ToString(), new[] { "true", "false" });
+            await JSRuntime.InvokeVoidAsync("logInfo", "Test checkbox toggled", new {
+                checkboxChecked = testCheckbox,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "复选框测试 - Checkbox test"
+            }, "USER_SELECTION");
+            
+            lastAction = $"Checkbox {(testCheckbox ? "checked" : "unchecked")}";
+            testCount++;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in checkbox handler", ex.Message, "CHECKBOX_ERROR");
+        }
+    }
+
+    private async Task TestInfoLog()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "info_test",
+                action = "test_info_log",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "This is a test info message", new {
+                testNumber = ++testCount,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "信息日志测试 - Info log test",
+                unicodeTest = "🎯📊💡✅❌⚠️",
+                chineseTest = "这是中文测试消息"
+            }, "INFO_TEST");
+            
+            lastAction = "Info log test executed";
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in info log test", ex.Message, "TEST_ERROR");
+        }
+    }
+
+    private async Task TestWarningLog()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "warning_test",
+                action = "test_warning_log",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logWarn", "This is a test warning message", new {
+                testNumber = ++testCount,
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "警告日志测试 - Warning log test",
+                warningReason = "This is just a test, no actual warning"
+            }, "WARNING_TEST");
+            
+            lastAction = "Warning log test executed";
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in warning log test", ex.Message, "TEST_ERROR");
+        }
+    }
+
+    private async Task TestErrorLog()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "error_test",
+                action = "test_error_log",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logError", "This is a test error message", "Simulated error for testing purposes", "ERROR_TEST");
+            
+            lastAction = "Error log test executed";
+            testCount++;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in error log test", ex.Message, "TEST_ERROR");
+        }
+    }
+
+    private async Task TestApiLog()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "api_test",
+                action = "test_api_log",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            // Simulate API request
+            await JSRuntime.InvokeVoidAsync("logApiRequest", "POST", "/api/test", new {
+                testData = "This is test data",
+                timestamp = DateTime.Now.ToString("HH:mm:ss"),
+                testMessage = "API请求测试 - API request test"
+            }, null);
+
+            // Simulate delay
+            await Task.Delay(500);
+
+            // Simulate API response
+            await JSRuntime.InvokeVoidAsync("logApiResponse", "POST", "/api/test", 200, new {
+                success = true,
+                message = "Test API call successful",
+                testMessage = "API响应测试 - API response test"
+            }, 500);
+            
+            lastAction = "API log test executed";
+            testCount++;
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in API log test", ex.Message, "TEST_ERROR");
+        }
+    }
+
+    private async Task TestPerformanceLog()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "performance_test",
+                action = "test_performance_log",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            var startTime = DateTime.Now;
+            
+            // Simulate some work
+            await Task.Delay(Random.Shared.Next(100, 1000));
+            
+            var duration = (DateTime.Now - startTime).TotalMilliseconds;
+            
+            await JSRuntime.InvokeVoidAsync("logPerformance", "test_operation", duration, new {
+                testNumber = ++testCount,
+                operationType = "simulated_work",
+                testMessage = "性能测试 - Performance test"
+            });
+            
+            lastAction = $"Performance log test executed ({duration:F0}ms)";
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error in performance log test", ex.Message, "TEST_ERROR");
+        }
+    }
+}

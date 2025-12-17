@@ -20,7 +20,7 @@ public class MathConceptValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal("请输入数学知识点", result.ErrorMessage);
+        Assert.Equal("请输入学习内容", result.ErrorMessage);
         Assert.NotEmpty(result.Suggestions);
     }
 
@@ -32,7 +32,7 @@ public class MathConceptValidatorTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Equal("请输入数学知识点", result.ErrorMessage);
+        Assert.Equal("请输入学习内容", result.ErrorMessage);
     }
 
     [Fact]
@@ -47,14 +47,14 @@ public class MathConceptValidatorTests
     }
 
     [Fact]
-    public void ValidateInput_NonMathContent_ReturnsInvalid()
+    public void ValidateInput_NonMathContent_ReturnsValid()
     {
-        // Act
+        // Act - 现在任何内容都被接受，由AI来处理
         var result = _validator.ValidateInput("电影故事");
 
         // Assert
-        Assert.False(result.IsValid);
-        Assert.Contains("请输入有效的数学概念", result.ErrorMessage);
+        Assert.True(result.IsValid);
+        Assert.Empty(result.ErrorMessage);
     }
 
     [Fact]

@@ -2,7 +2,7 @@
 
 ## 概述
 
-数学漫画生成器是一个基于Web的应用程序，它利用Gemini Nano Banana Pro API为儿童创建教育性的多格漫画。系统采用模块化架构，包含前端用户界面、后端API服务、AI集成层和数据存储层。
+数学漫画生成器是一个基于Web的应用程序，它利用多个AI服务（Gemini API和DeepSeek API）为儿童创建教育性的多格漫画。系统采用模块化架构，包含前端用户界面、后端API服务、AI集成层和数据存储层。该系统已实现完整的.NET 8解决方案，包含API、Web前端、共享库和测试项目。
 
 ## 架构
 
@@ -11,27 +11,38 @@
 ```
 ┌─────────────────────────────────────┐
 │           前端界面层                 │
-│      (Blazor Server/WASM)          │
+│         (Blazor Server)            │
+│    MathInputComponent.razor        │
+│   ComicDisplayComponent.razor      │
+│    HistoryComponent.razor          │
 └─────────────────────────────────────┘
                     │
 ┌─────────────────────────────────────┐
 │           API控制器层                │
 │        (ASP.NET Core Web API)      │
+│     ComicController.cs             │
+│     ImagesController.cs            │
 └─────────────────────────────────────┘
                     │
 ┌─────────────────────────────────────┐
 │          业务逻辑层                  │
-│     (漫画生成服务 + 验证服务)        │
+│   ComicGenerationService.cs        │
+│   PromptGenerationService.cs       │
+│   MathConceptValidator.cs          │
+│   GenerationOptionsProcessor.cs    │
 └─────────────────────────────────────┘
                     │
 ┌─────────────────────────────────────┐
 │         AI集成层                    │
-│    (Gemini Nano Banana Pro)       │
+│    GeminiAPIService.cs             │
+│    DeepSeekAPIService.cs           │
+│    ImageGenerationService.cs       │
 └─────────────────────────────────────┘
                     │
 ┌─────────────────────────────────────┐
 │          数据存储层                  │
-│     (文件系统 + 元数据数据库)        │
+│      StorageService.cs             │
+│   (文件系统 + JSON元数据)           │
 └─────────────────────────────────────┘
 ```
 
@@ -58,6 +69,14 @@
   - `loadHistory(): ComicHistory[]`
   - `deleteComic(id: string): void`
 
+#### ConsoleLoggingService
+- **职责**: 管理浏览器控制台的调试输出
+- **接口**:
+  - `logUserAction(action: string, details: object): void`
+  - `logError(error: Error, context: string): void`
+  - `logAPIRequest(url: string, params: object, timestamp: Date): void`
+  - `logAPIResponse(status: number, dataSize: number, processingTime: number): void`
+
 ### 2. 后端服务
 
 #### ComicGenerationService
@@ -67,17 +86,57 @@
   - `validateConcept(concept: string): ValidationResult`
 
 #### GeminiAPIService
-- **职责**: 与Gemini Nano Banana Pro API交互
+- **职责**: 与Gemini API交互生成漫画内容
 - **接口**:
-  - `generateComicContent(prompt: string): Promise<ComicContent>`
-  - `handleAPIError(error: APIError): ErrorResponse`
+  - `GenerateComicAsync(prompt: string): Task<string>`
+  - `GenerateImageAsync(prompt: string): Task<string>`
+
+#### DeepSeekAPIService  
+- **职责**: 与DeepSeek API交互进行内容生成
+- **接口**:
+  - `GenerateContentAsync(request: PromptGenerationRequest): Task<string>`
+  - `ValidateApiKeyAsync(): Task<bool>`
+
+#### ImageGenerationService
+- **职责**: 管理图像生成和处理
+- **接口**:
+  - `GenerateImageAsync(prompt: string): Task<string>`
+  - `ProcessImageAsync(imageData: byte[]): Task<string>`
 
 #### StorageService
 - **职责**: 管理漫画存储和检索
 - **接口**:
-  - `saveComic(comic: MultiPanelComic): Promise<string>`
-  - `loadComic(id: string): Promise<MultiPanelComic>`
-  - `listComics(): Promise<ComicMetadata[]>`
+  - `SaveComicAsync(comic: MultiPanelComic): Task<string>`
+  - `LoadComicAsync(id: string): Task<MultiPanelComic>`
+  - `ListComicsAsync(): Task<List<ComicMetadata>>`
+  - `DeleteComicAsync(id: string): Task<bool>`
+  - `GetComicsByFilterAsync(filter: ComicFilter): Task<List<ComicMetadata>>`
+
+#### ErrorLoggingService
+- **职责**: 统一错误日志管理
+- **接口**:
+  - `LogErrorAsync(error: Exception, context: string): Task`
+  - `LogWarningAsync(message: string, context: string): Task`
+
+#### ResourceManagementService
+- **职责**: 系统资源监控和管理
+- **接口**:
+  - `CheckMemoryUsage(): ResourceStatus`
+  - `CheckDiskSpace(): ResourceStatus`
+  - `ValidateResourceLimits(): bool`
+
+#### ConfigurationValidationService
+- **职责**: 配置验证和管理
+- **接口**:
+  - `ValidateApiConfiguration(): ValidationResult`
+  - `ValidateStorageConfiguration(): ValidationResult`
+
+#### LoggingService
+- **职责**: 统一管理系统日志输出
+- **接口**:
+  - `logToConsole(level: LogLevel, message: string, data?: object): void`
+  - `formatUTF8Message(message: string, data: object): string`
+  - `trackUserInteraction(interaction: UserInteraction): void`
 
 ## 数据模型
 
@@ -136,6 +195,31 @@ public class ComicMetadata
     public long FileSize { get; set; }
     public ImageFormat Format { get; set; }
     public List<string> Tags { get; set; }
+}
+```
+
+### LogEntry
+```csharp
+public class LogEntry
+{
+    public DateTime Timestamp { get; set; }
+    public LogLevel Level { get; set; }
+    public string Message { get; set; }
+    public string? Context { get; set; }
+    public object? Data { get; set; }
+    public string? UserId { get; set; }
+}
+```
+
+### UserInteraction
+```csharp
+public class UserInteraction
+{
+    public string ActionType { get; set; }      // "input", "click", "select", etc.
+    public string ComponentName { get; set; }   // 组件名称
+    public object? ActionData { get; set; }     // 交互数据
+    public DateTime Timestamp { get; set; }
+    public string? SessionId { get; set; }
 }
 ```
 
@@ -239,6 +323,26 @@ public class ComicMetadata
 *对于任何*系统恢复正常的情况，应该允许用户重新尝试操作
 **验证: 需求 6.5**
 
+### 属性 25: 用户操作日志记录
+*对于任何*用户操作，系统应该在浏览器控制台输出UTF-8格式的操作提示信息
+**验证: 需求 7.1**
+
+### 属性 26: 错误信息控制台输出
+*对于任何*系统错误，控制台应该包含详细的错误信息和堆栈跟踪
+**验证: 需求 7.2**
+
+### 属性 27: 用户交互跟踪
+*对于任何*用户输入或选择操作，控制台应该记录用户交互的详细信息
+**验证: 需求 7.3**
+
+### 属性 28: API请求日志记录
+*对于任何*发起的API请求，控制台应该输出请求的详细信息包括URL、参数和时间戳
+**验证: 需求 7.4**
+
+### 属性 29: API响应日志记录
+*对于任何*接收的API响应，控制台应该输出响应状态、数据大小和处理时间
+**验证: 需求 7.5**
+
 ## 错误处理
 
 ### 输入验证错误
@@ -264,17 +368,28 @@ public class ComicMetadata
 ## 测试策略
 
 ### 单元测试方法
-系统将使用xUnit作为单元测试框架，重点测试：
+系统使用xUnit作为单元测试框架，重点测试：
 - 输入验证逻辑的具体示例
 - API请求/响应处理的边界情况
 - 数据模型的序列化/反序列化
 - 错误处理的特定场景
 
+**当前实现状态：**
+- ✅ 完整的单元测试套件已实现
+- ✅ 所有主要服务都有对应的测试类
+- ✅ 使用Moq进行依赖模拟
+- ✅ 测试覆盖包括：ComicGenerationService、GeminiAPIService、DeepSeekAPIService、StorageService、ErrorLoggingService、ResourceManagementService等
+
 ### 基于属性的测试方法
-系统将使用FsCheck作为属性测试库，配置要求：
+系统使用FsCheck作为属性测试库，配置要求：
 - 每个属性测试运行最少100次迭代
 - 每个属性测试必须用注释明确引用设计文档中的正确性属性
 - 使用格式：'**Feature: math-comic-generator, Property {number}: {property_text}**'
+
+**当前实现状态：**
+- ✅ 基础属性测试框架已设置（BasicPropertyTests.cs）
+- ✅ FsCheck集成已配置
+- ⚠️ 需要实现29个正确性属性的完整属性测试套件
 
 属性测试将验证：
 - 输入验证在所有可能输入上的一致性

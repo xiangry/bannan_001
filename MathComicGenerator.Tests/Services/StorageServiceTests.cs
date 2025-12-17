@@ -180,7 +180,7 @@ public class StorageServiceTests : IDisposable
         var comic1 = CreateTestComic();
         var comic2 = CreateTestComic();
         comic2.Id = Guid.NewGuid().ToString();
-        comic2.Metadata.GenerationOptions.AgeGroup = AgeGroup.MiddleSchool;
+        comic2.Metadata.GenerationOptions.AgeGroup = AgeGroup.Elementary;
 
         await _storageService.SaveComicAsync(comic1);
         await _storageService.SaveComicAsync(comic2);
@@ -191,7 +191,7 @@ public class StorageServiceTests : IDisposable
         // Assert
         Assert.Equal(2, result.TotalComics);
         Assert.True(result.ComicsByAgeGroup.ContainsKey(AgeGroup.Elementary));
-        Assert.True(result.ComicsByAgeGroup.ContainsKey(AgeGroup.MiddleSchool));
+        Assert.True(result.ComicsByAgeGroup.ContainsKey(AgeGroup.Elementary));
         Assert.NotEmpty(result.MostPopularConcepts);
     }
 

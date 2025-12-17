@@ -65,7 +65,7 @@ public class ComicGenerationService : IComicGenerationService
             var finalContent = EnsurePanelCount(adjustedContent, options.PanelCount);
 
             // 8. 创建最终的漫画对象
-            var comic = CreateMultiPanelComic(finalContent, concept, options);
+            var comic = await CreateMultiPanelComicAsync(finalContent, concept, options);
 
             _logger.LogInformation("Comic generation completed successfully for concept: {Topic}", concept.Topic);
             return comic;
@@ -103,7 +103,7 @@ public class ComicGenerationService : IComicGenerationService
 
             // 7. 创建最终的漫画对象（从提示词推断概念）
             var inferredConcept = InferMathConceptFromPrompt(prompt);
-            var comic = CreateMultiPanelComic(finalContent, inferredConcept, options);
+            var comic = await CreateMultiPanelComicAsync(finalContent, inferredConcept, options);
 
             _logger.LogInformation("Comic generation from prompt completed successfully");
             return comic;
@@ -163,10 +163,8 @@ public class ComicGenerationService : IComicGenerationService
     {
         return ageGroup switch
         {
-            AgeGroup.Preschool => "3-5岁学龄前儿童",
-            AgeGroup.Elementary => "6-11岁小学生",
-            AgeGroup.MiddleSchool => "12-14岁中学生",
-            AgeGroup.HighSchool => "15-18岁高中生",
+            AgeGroup.Preschool => "5-6岁学龄前儿童",
+            AgeGroup.Elementary => "6岁以上小学及以上学生",
             _ => "小学生"
         };
     }
@@ -248,7 +246,7 @@ public class ComicGenerationService : IComicGenerationService
         
         var adjustedContent = new ComicContent
         {
-            Title = AdjustTextComplexity(content.Title, complexityLevel),
+            Title = AdjustTitleComplexity(content.Title, complexityLevel),
             Panels = new List<PanelContent>()
         };
 
@@ -270,11 +268,35 @@ public class ComicGenerationService : IComicGenerationService
         return ageGroup switch
         {
             AgeGroup.Preschool => 1,    // 最简单
-            AgeGroup.Elementary => 2,   // 简单
-            AgeGroup.MiddleSchool => 3, // 中等
-            AgeGroup.HighSchool => 4,   // 复杂
+            AgeGroup.Elementary => 2,   // 简单到中等
             _ => 2
         };
+    }
+
+    private string AdjustTitleComplexity(string text, int complexityLevel)
+    {
+        if (string.IsNullOrEmpty(text)) return text;
+
+        // 对于标题，只进行简单的词汇替换，不截断长度
+        var simplifications = new Dictionary<string, string>
+        {
+            { "计算", "算" },
+            { "运算", "算" },
+            { "数学", "数字" },
+            { "解决", "做" },
+            { "理解", "知道" }
+        };
+
+        var result = text;
+        if (complexityLevel == 1) // 只对学龄前进行简化
+        {
+            foreach (var pair in simplifications)
+            {
+                result = result.Replace(pair.Key, pair.Value);
+            }
+        }
+
+        return result;
     }
 
     private string AdjustTextComplexity(string text, int complexityLevel)
@@ -316,7 +338,7 @@ public class ComicGenerationService : IComicGenerationService
             result = result.Replace(pair.Key, pair.Value);
         }
 
-        // 限制句子长度
+        // 限制句子长度（仅对对话和叙述，不对标题）
         if (result.Length > 20)
         {
             var sentences = result.Split('。', '！', '？');
@@ -471,7 +493,7 @@ public class ComicGenerationService : IComicGenerationService
         };
     }
 
-    private MultiPanelComic CreateMultiPanelComic(ComicContent content, MathConcept concept, GenerationOptions options)
+    private async Task<MultiPanelComic> CreateMultiPanelComicAsync(ComicContent content, MathConcept concept, GenerationOptions options)
     {
         var comic = new MultiPanelComic
         {
@@ -488,14 +510,16 @@ public class ComicGenerationService : IComicGenerationService
             }
         };
 
+        // 不生成本地图片，只创建面板内容结构
         for (int i = 0; i < content.Panels.Count; i++)
         {
             var panel = content.Panels[i];
+            
             comic.Panels.Add(new ComicPanel
             {
                 Id = Guid.NewGuid().ToString(),
                 Order = i + 1,
-                ImageUrl = $"panel_{i + 1}.png", // 占位符，实际应该生成图片
+                ImageUrl = $"/api/placeholder/panel_{i + 1}", // 占位符URL，实际图片由AI生成
                 Dialogue = panel.Dialogue,
                 Narration = panel.Narration
             });

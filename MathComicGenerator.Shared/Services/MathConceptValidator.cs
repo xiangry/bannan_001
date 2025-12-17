@@ -11,6 +11,8 @@ public class MathConceptValidator : IMathConceptValidator
         // 基础数学概念
         "加法", "减法", "乘法", "除法", "addition", "subtraction", "multiplication", "division",
         "数字", "数学", "计算", "运算", "number", "math", "mathematics", "calculation",
+        "分解", "组合", "拆分", "合并", "decomposition", "composition", "split", "combine",
+        "十以内", "二十以内", "一百以内", "within ten", "within twenty", "within hundred",
         
         // 几何概念
         "几何", "图形", "三角形", "正方形", "圆形", "rectangle", "triangle", "circle", "square",
@@ -27,7 +29,12 @@ public class MathConceptValidator : IMathConceptValidator
         "统计", "概率", "平均数", "statistics", "probability", "average", "mean", "median",
         
         // 测量
-        "测量", "长度", "重量", "时间", "measurement", "length", "weight", "time", "volume"
+        "测量", "长度", "重量", "时间", "measurement", "length", "weight", "time", "volume",
+        
+        // 数字相关
+        "一", "二", "三", "四", "五", "六", "七", "八", "九", "十", "零",
+        "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "0",
+        "个", "只", "条", "支", "本", "张", "pieces", "items", "count"
     };
 
     private static readonly HashSet<string> NonMathKeywords = new(StringComparer.OrdinalIgnoreCase)
@@ -44,8 +51,8 @@ public class MathConceptValidator : IMathConceptValidator
             return new ValidationResult
             {
                 IsValid = false,
-                ErrorMessage = "请输入知识点内容",
-                Suggestions = new List<string> { "例如：加法运算", "光的折射", "历史事件", "语言语法" }
+                ErrorMessage = "请输入学习内容",
+                Suggestions = new List<string> { "例如：十以内的分解法", "光的折射", "历史事件", "语言语法" }
             };
         }
 
@@ -79,6 +86,7 @@ public class MathConceptValidator : IMathConceptValidator
             };
         }
 
+        // 移除数学内容校验，直接通过基本验证
         return new ValidationResult
         {
             IsValid = true,

@@ -10,10 +10,8 @@ public enum DifficultyLevel
 
 public enum AgeGroup
 {
-    Preschool,      // 3-5岁
-    Elementary,     // 6-11岁
-    MiddleSchool,   // 12-14岁
-    HighSchool      // 15-18岁
+    Preschool,      // 5-6岁
+    Elementary      // 6岁以上
 }
 
 public enum VisualStyle

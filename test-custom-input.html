@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>自定义知识点测试</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin: 15px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .result {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            white-space: pre-wrap;
+            display: none;
+        }
+        .success {
+            background: #d5f4e6;
+            border-left: 4px solid #27ae60;
+        }
+        .error {
+            background: #fdf2f2;
+            border-left: 4px solid #e74c3c;
+        }
+        .loading {
+            color: #f39c12;
+        }
+        .step {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 自定义知识点测试</h1>
+        <p>测试用户输入任意知识点的两步生成功能</p>
+
+        <!-- 步骤1: 输入自定义知识点 -->
+        <div class="step">
+            <h3>📝 步骤1: 输入任意知识点</h3>
+            
+            <div class="form-group">
+                <label>知识点内容:</label>
+                <textarea id="knowledgePoint" placeholder="请输入任意知识点，例如：
+• 数学：加法运算、几何图形、分数概念
+• 科学：光的折射、细胞分裂、化学反应
+• 历史：古代文明、历史事件、文化传统
+• 语言：语法规则、词汇学习、文学作品
+• 其他任意学科知识点...">光的折射原理</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>年龄组:</label>
+                <select id="ageGroup">
+                    <option value="0">学龄前 (3-5岁)</option>
+                    <option value="1" selected>小学 (6-11岁)</option>
+                    <option value="2">中学 (12-14岁)</option>
+                    <option value="3">高中 (15-18岁)</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>面板数量:</label>
+                <input type="number" id="panelCount" value="4" min="3" max="6">
+            </div>
+
+            <div class="form-group">
+                <label>视觉风格:</label>
+                <select id="visualStyle">
+                    <option value="0" selected>卡通风格</option>
+                    <option value="1">写实风格</option>
+                    <option value="2">简约风格</option>
+                    <option value="3">多彩风格</option>
+                </select>
+            </div>
+
+            <button onclick="generatePrompt()" id="generateBtn">🎯 生成提示词</button>
+            <div id="promptResult" class="result"></div>
+        </div>
+
+        <!-- 步骤2: 编辑提示词 -->
+        <div class="step">
+            <h3>✏️ 步骤2: 编辑生成的提示词</h3>
+            <textarea id="promptEditor" placeholder="生成的提示词将显示在这里，您可以编辑..."></textarea>
+            <br>
+            <button onclick="validatePrompt()" id="validateBtn" disabled>✅ 验证提示词</button>
+            <button onclick="generateComic()" id="generateComicBtn" disabled>🖼️ 生成漫画</button>
+            <div id="validationResult" class="result"></div>
+        </div>
+
+        <!-- 步骤3: 漫画结果 -->
+        <div class="step">
+            <h3>🎨 步骤3: 生成的漫画</h3>
+            <div id="comicResult" class="result"></div>
+        </div>
+
+        <!-- 测试用例 -->
+        <div class="step">
+            <h3>🧪 快速测试用例</h3>
+            <p>点击下面的按钮快速测试不同类型的知识点：</p>
+            <button onclick="testCase('数学', '分数的概念和应用')">数学：分数概念</button>
+            <button onclick="testCase('科学', '植物的光合作用过程')">科学：光合作用</button>
+            <button onclick="testCase('历史', '中国古代四大发明')">历史：四大发明</button>
+            <button onclick="testCase('语言', '英语过去时态的用法')">语言：过去时态</button>
+            <button onclick="testCase('艺术', '色彩搭配的基本原理')">艺术：色彩搭配</button>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'https://localhost:7109';
+        let currentPromptId = '';
+        let currentOptions = {};
+
+        // 测试用例
+        function testCase(subject, content) {
+            document.getElementById('knowledgePoint').value = content;
+            showMessage(`已设置测试用例：${subject} - ${content}`, 'success');
+        }
+
+        // 生成提示词
+        async function generatePrompt() {
+            const btn = document.getElementById('generateBtn');
+            const result = document.getElementById('promptResult');
+            const knowledgePoint = document.getElementById('knowledgePoint').value.trim();
+            
+            if (!knowledgePoint) {
+                showMessage('请输入知识点内容', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '🔄 生成中...';
+            result.style.display = 'block';
+            result.className = 'result loading';
+            result.textContent = '正在生成提示词，请稍候...';
+
+            try {
+                const requestData = {
+                    MathConcept: knowledgePoint,
+                    Options: {
+                        PanelCount: parseInt(document.getElementById('panelCount').value),
+                        AgeGroup: parseInt(document.getElementById('ageGroup').value),
+                        VisualStyle: parseInt(document.getElementById('visualStyle').value),
+                        Language: 0 // Chinese
+                    }
+                };
+
+                console.log('发送请求:', requestData);
+
+                const response = await fetch(`${API_BASE}/api/comic/generate-prompt`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                console.log('响应状态:', response.status);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('响应数据:', data);
+                    
+                    const promptData = data.data;
+                    
+                    currentPromptId = promptData.id;
+                    currentOptions = promptData.options;
+                    
+                    document.getElementById('promptEditor').value = promptData.generatedPrompt;
+                    document.getElementById('validateBtn').disabled = false;
+                    document.getElementById('generateComicBtn').disabled = false;
+                    
+                    result.className = 'result success';
+                    result.textContent = `✅ 提示词生成成功！
+知识点: ${promptData.mathConcept}
+ID: ${promptData.id}
+创建时间: ${new Date(promptData.createdAt).toLocaleString()}
+
+生成的提示词:
+${promptData.generatedPrompt}
+
+改进建议:
+${promptData.suggestions.map(s => `• ${s}`).join('\n')}`;
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '生成失败');
+                }
+            } catch (error) {
+                console.error('生成错误:', error);
+                result.className = 'result error';
+                result.textContent = `❌ 生成失败: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🎯 生成提示词';
+            }
+        }
+
+        // 验证提示词
+        async function validatePrompt() {
+            const btn = document.getElementById('validateBtn');
+            const result = document.getElementById('validationResult');
+            const prompt = document.getElementById('promptEditor').value;
+
+            if (!prompt.trim()) {
+                showMessage('请先输入提示词', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '🔄 验证中...';
+            result.style.display = 'block';
+            result.className = 'result loading';
+            result.textContent = '正在验证提示词...';
+
+            try {
+                const response = await fetch(`${API_BASE}/api/comic/validate-prompt`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ Prompt: prompt })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const validationData = data.data;
+                    
+                    if (validationData.isValid) {
+                        result.className = 'result success';
+                        result.textContent = '✅ 提示词验证通过！可以生成漫画。';
+                    } else {
+                        result.className = 'result error';
+                        result.textContent = `❌ 提示词验证失败: ${validationData.errorMessage}
+                        
+建议:
+${validationData.suggestions?.map(s => `• ${s}`).join('\n') || '无'}`;
+                    }
+                } else {
+                    throw new Error('验证请求失败');
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = `❌ 验证失败: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '✅ 验证提示词';
+            }
+        }
+
+        // 生成漫画
+        async function generateComic() {
+            const btn = document.getElementById('generateComicBtn');
+            const result = document.getElementById('comicResult');
+            const prompt = document.getElementById('promptEditor').value;
+
+            if (!prompt.trim()) {
+                showMessage('请先输入提示词', 'error');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.textContent = '🔄 生成中...';
+            result.style.display = 'block';
+            result.className = 'result loading';
+            result.textContent = '正在生成漫画，请稍候...';
+
+            try {
+                const requestData = {
+                    PromptId: currentPromptId,
+                    EditedPrompt: prompt,
+                    Options: currentOptions
+                };
+
+                const response = await fetch(`${API_BASE}/api/comic/generate-from-prompt`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const comicData = data.data;
+                    
+                    result.className = 'result success';
+                    result.textContent = `✅ 漫画生成成功！
+ID: ${comicData.id}
+标题: ${comicData.title}
+面板数量: ${comicData.panels.length}
+创建时间: ${new Date(comicData.createdAt).toLocaleString()}
+
+面板预览:
+${comicData.panels.map((panel, i) => 
+    `面板 ${i + 1}:
+    对话: ${panel.dialogue?.join('; ') || '无'}
+    旁白: ${panel.narration || '无'}`
+).join('\n\n')}`;
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || '生成失败');
+                }
+            } catch (error) {
+                result.className = 'result error';
+                result.textContent = `❌ 生成失败: ${error.message}`;
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '🖼️ 生成漫画';
+            }
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const result = document.getElementById('promptResult');
+            result.style.display = 'block';
+            result.className = `result ${type}`;
+            result.textContent = message;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    result.style.display = 'none';
+                }, 3000);
+            }
+        }
+
+        // 页面加载完成
+        window.onload = function() {
+            console.log('自定义知识点测试页面已加载');
+            showMessage('页面已加载，可以开始测试任意知识点的两步生成功能！', 'success');
+        };
+    </script>
+</body>
+</html>

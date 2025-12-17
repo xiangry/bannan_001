@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <PackageReference Include="Polly" Version="8.2.0" />
+    <PackageReference Include="System.Drawing.Common" Version="10.0.1" />
   </ItemGroup>
 
   <ItemGroup>

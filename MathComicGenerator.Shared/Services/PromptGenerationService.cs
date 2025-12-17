@@ -133,11 +133,22 @@ public class PromptGenerationService : IPromptGenerationService
         sb.AppendLine($"语言: {(options.Language == Language.Chinese ? "中文" : "英文")}");
         sb.AppendLine();
 
+        // 拼音相关指令
+        if (options.EnablePinyin && options.Language == Language.Chinese)
+        {
+            sb.AppendLine("拼音要求: 为所有中文文字添加拼音标注，格式为 汉字(hàn zì)");
+            sb.AppendLine();
+        }
+
         sb.AppendLine("请确保生成的提示词：");
         sb.AppendLine("- 适合目标年龄组的理解水平");
         sb.AppendLine("- 包含准确的知识概念");
         sb.AppendLine("- 具有教育价值和趣味性");
         sb.AppendLine("- 描述清晰，便于图像生成");
+        if (options.EnablePinyin && options.Language == Language.Chinese)
+        {
+            sb.AppendLine("- 所有中文对话和文字都要标注拼音，帮助儿童学习汉字读音");
+        }
         sb.AppendLine();
         sb.AppendLine("请按以下格式返回：");
         sb.AppendLine("提示词: [详细的漫画创作提示词]");
@@ -298,10 +309,8 @@ public class PromptGenerationService : IPromptGenerationService
     {
         return ageGroup switch
         {
-            AgeGroup.Preschool => "学龄前儿童 (3-5岁) - 需要简单直观的视觉元素",
-            AgeGroup.Elementary => "小学生 (6-11岁) - 适合基础数学概念学习",
-            AgeGroup.MiddleSchool => "中学生 (12-14岁) - 可以包含更复杂的数学概念",
-            AgeGroup.HighSchool => "高中生 (15-18岁) - 适合高级数学概念和抽象思维",
+            AgeGroup.Preschool => "学龄前儿童 (5-6岁) - 需要简单直观的视觉元素，语言简单易懂",
+            AgeGroup.Elementary => "小学及以上 (6岁以上) - 适合基础知识概念学习，可以包含更多细节",
             _ => "通用年龄组"
         };
     }

@@ -130,24 +130,144 @@
     [Parameter] public EventCallback<ComicMetadata> OnShare { get; set; }
     [Parameter] public EventCallback<ComicMetadata> OnDelete { get; set; }
 
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "HistoryComponent initialized", new {
+                historyCount = ComicHistory.Count,
+                isLoading = IsLoading,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_INIT");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "HistoryComponent parameters updated", new {
+                historyCount = ComicHistory.Count,
+                isLoading = IsLoading,
+                uniqueConcepts = GetUniqueConceptsCount(),
+                totalPanels = GetTotalPanels(),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_UPDATE");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
+        }
+    }
+
     private async Task RefreshHistory()
     {
-        await OnRefresh.InvokeAsync();
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "refresh",
+                action = "refresh_history",
+                currentCount = ComicHistory.Count,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Refreshing history", new {
+                currentCount = ComicHistory.Count,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "HISTORY_REFRESH");
+
+            await OnRefresh.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error refreshing history", ex.Message, "HISTORY_REFRESH");
+        }
     }
 
     private async Task ViewComic(ComicMetadata comic)
     {
-        await OnView.InvokeAsync(comic);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "view",
+                action = "view_comic",
+                mathConcept = comic.MathConcept,
+                ageGroup = comic.GenerationOptions.AgeGroup.ToString(),
+                panelCount = comic.GenerationOptions.PanelCount,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Viewing comic from history", new {
+                mathConcept = comic.MathConcept,
+                ageGroup = comic.GenerationOptions.AgeGroup.ToString(),
+                panelCount = comic.GenerationOptions.PanelCount,
+                visualStyle = comic.GenerationOptions.VisualStyle.ToString(),
+                language = comic.GenerationOptions.Language.ToString(),
+                tags = comic.Tags,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "HISTORY_VIEW");
+
+            await OnView.InvokeAsync(comic);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error viewing comic", ex.Message, "HISTORY_VIEW");
+        }
     }
 
     private async Task ShareComic(ComicMetadata comic)
     {
-        await OnShare.InvokeAsync(comic);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "share",
+                action = "share_comic_from_history",
+                mathConcept = comic.MathConcept,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Sharing comic from history", new {
+                mathConcept = comic.MathConcept,
+                ageGroup = comic.GenerationOptions.AgeGroup.ToString(),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "HISTORY_SHARE");
+
+            await OnShare.InvokeAsync(comic);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error sharing comic from history", ex.Message, "HISTORY_SHARE");
+        }
     }
 
     private async Task DeleteComic(ComicMetadata comic)
     {
-        await OnDelete.InvokeAsync(comic);
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "delete",
+                action = "delete_comic",
+                mathConcept = comic.MathConcept,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logWarn", "Deleting comic from history", new {
+                mathConcept = comic.MathConcept,
+                ageGroup = comic.GenerationOptions.AgeGroup.ToString(),
+                panelCount = comic.GenerationOptions.PanelCount,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "HISTORY_DELETE");
+
+            await OnDelete.InvokeAsync(comic);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error deleting comic", ex.Message, "HISTORY_DELETE");
+        }
     }
 
     private int GetUniqueConceptsCount()
@@ -177,9 +297,7 @@
         return ageGroup switch
         {
             AgeGroup.Preschool => "学龄前",
-            AgeGroup.Elementary => "小学",
-            AgeGroup.MiddleSchool => "中学",
-            AgeGroup.HighSchool => "高中",
+            AgeGroup.Elementary => "小学及以上",
             _ => "未知"
         };
     }

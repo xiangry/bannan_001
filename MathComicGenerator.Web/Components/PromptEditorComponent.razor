@@ -37,7 +37,9 @@
                     
                     <textarea @bind="editedPrompt" 
                               @bind:event="oninput"
-                              @onblur="ValidatePrompt"
+                              @bind:after="HandlePromptInputAfter"
+                              @onfocus="HandlePromptFocus"
+                              @onblur="HandlePromptBlur"
                               class="@GetPromptTextAreaClass()"
                               id="promptText"
                               rows="8"
@@ -74,10 +76,8 @@
                     <div class="col-md-6">
                         <label class="form-label">年龄组</label>
                         <select @bind="PromptResponse.Options.AgeGroup" class="form-select">
-                            <option value="@AgeGroup.Preschool">学龄前 (3-5岁)</option>
-                            <option value="@AgeGroup.Elementary">小学 (6-11岁)</option>
-                            <option value="@AgeGroup.MiddleSchool">中学 (12-14岁)</option>
-                            <option value="@AgeGroup.HighSchool">高中 (15-18岁)</option>
+                            <option value="@AgeGroup.Preschool">学龄前 (5-6岁)</option>
+                            <option value="@AgeGroup.Elementary">小学及以上 (6岁以上)</option>
                         </select>
                     </div>
                     
@@ -154,42 +154,156 @@
     private List<string> suggestions = new();
     private bool isOptimizing = false;
 
-    protected override void OnParametersSet()
+    protected override async Task OnInitializedAsync()
     {
-        if (PromptResponse != null && editedPrompt != PromptResponse.GeneratedPrompt)
+        try
         {
-            editedPrompt = PromptResponse.GeneratedPrompt;
-            originalPrompt = PromptResponse.GeneratedPrompt;
-            suggestions = PromptResponse.Suggestions;
-            validationMessage = string.Empty;
+            await JSRuntime.InvokeVoidAsync("logInfo", "PromptEditorComponent initialized", new {
+                hasPromptResponse = PromptResponse != null,
+                isGenerating = IsGenerating,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_INIT");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            if (PromptResponse != null && editedPrompt != PromptResponse.GeneratedPrompt)
+            {
+                var oldPrompt = editedPrompt;
+                editedPrompt = PromptResponse.GeneratedPrompt;
+                originalPrompt = PromptResponse.GeneratedPrompt;
+                suggestions = PromptResponse.Suggestions;
+                validationMessage = string.Empty;
+
+                await JSRuntime.InvokeVoidAsync("logInfo", "Prompt loaded into editor", new {
+                    promptId = PromptResponse.Id,
+                    promptLength = editedPrompt.Length,
+                    suggestionsCount = suggestions.Count,
+                    ageGroup = PromptResponse.Options.AgeGroup.ToString(),
+                    panelCount = PromptResponse.Options.PanelCount,
+                    visualStyle = PromptResponse.Options.VisualStyle.ToString(),
+                    language = PromptResponse.Options.Language.ToString(),
+                    timestamp = DateTime.Now.ToString("HH:mm:ss")
+                }, "PROMPT_LOAD");
+            }
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "PromptEditorComponent parameters updated", new {
+                hasPromptResponse = PromptResponse != null,
+                isGenerating = IsGenerating,
+                promptLength = editedPrompt.Length,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_UPDATE");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
         }
     }
 
     private async Task GenerateComic()
     {
-        if (!IsPromptValid()) return;
-
-        var request = new ComicImageGenerationRequest
+        try
         {
-            PromptId = PromptResponse?.Id ?? string.Empty,
-            EditedPrompt = editedPrompt,
-            Options = PromptResponse?.Options ?? new GenerationOptions()
-        };
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "generate_comic",
+                action = "generate_comic_from_prompt",
+                promptLength = editedPrompt.Length,
+                isValid = IsPromptValid(),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
 
-        await OnGenerateComic.InvokeAsync(request);
+            if (!IsPromptValid())
+            {
+                await JSRuntime.InvokeVoidAsync("logWarn", "Attempted to generate comic with invalid prompt", new {
+                    promptLength = editedPrompt.Length,
+                    validationMessage,
+                    timestamp = DateTime.Now.ToString("HH:mm:ss")
+                }, "PROMPT_VALIDATION");
+                return;
+            }
+
+            var request = new ComicImageGenerationRequest
+            {
+                PromptId = PromptResponse?.Id ?? string.Empty,
+                EditedPrompt = editedPrompt,
+                Options = PromptResponse?.Options ?? new GenerationOptions()
+            };
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Generating comic from edited prompt", new {
+                promptId = request.PromptId,
+                editedPromptLength = request.EditedPrompt.Length,
+                originalPromptLength = originalPrompt.Length,
+                wasModified = editedPrompt != originalPrompt,
+                options = new {
+                    ageGroup = request.Options.AgeGroup.ToString(),
+                    panelCount = request.Options.PanelCount,
+                    visualStyle = request.Options.VisualStyle.ToString(),
+                    language = request.Options.Language.ToString(),
+                    enablePinyin = request.Options.EnablePinyin
+                },
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMIC_GENERATION");
+
+            await OnGenerateComic.InvokeAsync(request);
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error generating comic from prompt", ex.Message, "COMIC_GENERATION");
+        }
     }
 
     private async Task GoBack()
     {
-        await OnGoBack.InvokeAsync();
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "go_back",
+                action = "return_to_input",
+                promptWasModified = editedPrompt != originalPrompt,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Returning to input form", new {
+                promptWasModified = editedPrompt != originalPrompt,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "NAVIGATION");
+
+            await OnGoBack.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error going back to input", ex.Message, "NAVIGATION");
+        }
     }
 
     private async Task OptimizePrompt()
     {
         if (PromptResponse == null) return;
 
+        var startTime = DateTime.Now;
+
         try
         {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "optimize",
+                action = "optimize_prompt",
+                currentLength = editedPrompt.Length,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Starting prompt optimization", new {
+                originalLength = editedPrompt.Length,
+                promptId = PromptResponse.Id,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_OPTIMIZATION");
+
             isOptimizing = true;
             StateHasChanged();
 
@@ -197,20 +311,34 @@
             // 暂时模拟优化过程
             await Task.Delay(2000);
             
+            var oldPrompt = editedPrompt;
+            
             // 实际实现中应该调用 /api/comic/optimize-prompt
             // var optimizedPrompt = await Http.PostAsJsonAsync("/api/comic/optimize-prompt", new { Prompt = editedPrompt, Options = PromptResponse.Options });
             
             // 模拟优化结果
             if (editedPrompt.Length < 100)
             {
-                editedPrompt += "\n\n[优化建议] 添加更多视觉细节描述，包括角色表情、场景布置和色彩搭配，使漫画更加生动有趣。";
+                editedPrompt += "\n\n[Optimization] Added more visual detail descriptions, including character expressions, scene layout and color matching to make the comic more vivid and interesting.";
             }
+            
+            var duration = (DateTime.Now - startTime).TotalMilliseconds;
+            
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt optimization completed", new {
+                oldLength = oldPrompt.Length,
+                newLength = editedPrompt.Length,
+                duration = $"{duration}ms",
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_OPTIMIZATION");
             
             await ValidatePrompt();
         }
         catch (Exception ex)
         {
-            validationMessage = $"优化失败：{ex.Message}";
+            var duration = (DateTime.Now - startTime).TotalMilliseconds;
+            await JSRuntime.InvokeVoidAsync("logError", "Prompt optimization failed", ex.Message, "PROMPT_OPTIMIZATION");
+            await JSRuntime.InvokeVoidAsync("logPerformance", "prompt_optimization_error", duration, new { error = ex.Message });
+            validationMessage = $"Optimization failed: {ex.Message}";
         }
         finally
         {
@@ -219,51 +347,159 @@
         }
     }
 
-    private void ResetPrompt()
+    private async Task ResetPrompt()
     {
-        editedPrompt = originalPrompt;
-        validationMessage = string.Empty;
-        suggestions = PromptResponse?.Suggestions ?? new List<string>();
-        StateHasChanged();
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "reset",
+                action = "reset_prompt",
+                currentLength = editedPrompt.Length,
+                originalLength = originalPrompt.Length,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            var oldPrompt = editedPrompt;
+            editedPrompt = originalPrompt;
+            validationMessage = string.Empty;
+            suggestions = PromptResponse?.Suggestions ?? new List<string>();
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt reset to original", new {
+                oldLength = oldPrompt.Length,
+                resetLength = editedPrompt.Length,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_RESET");
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error resetting prompt", ex.Message, "PROMPT_RESET");
+        }
+    }
+
+    // Event handlers for console debugging
+    private async Task HandlePromptInputAfter()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserInput", "prompt_edit", editedPrompt.Length.ToString(), null);
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt text changed", new {
+                length = editedPrompt.Length,
+                wasModified = editedPrompt != originalPrompt,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_EDIT");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error logging prompt input", ex.Message, "INPUT_ERROR");
+        }
+    }
+
+    private async Task HandlePromptFocus(FocusEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt textarea focused", new {
+                currentLength = editedPrompt.Length,
+                isModified = editedPrompt != originalPrompt,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "USER_FOCUS");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error logging focus event", ex.Message, "FOCUS_ERROR");
+        }
+    }
+
+    private async Task HandlePromptBlur(FocusEventArgs e)
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt textarea blurred", new {
+                finalLength = editedPrompt.Length,
+                isModified = editedPrompt != originalPrompt,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "USER_BLUR");
+            
+            await ValidatePrompt();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error logging blur event", ex.Message, "BLUR_ERROR");
+        }
     }
 
     private async Task ValidatePrompt()
     {
-        validationMessage = string.Empty;
-        suggestions.Clear();
-
-        if (string.IsNullOrWhiteSpace(editedPrompt))
+        try
         {
-            validationMessage = "提示词不能为空";
-            return;
-        }
+            validationMessage = string.Empty;
+            suggestions.Clear();
 
-        if (editedPrompt.Length < 10)
-        {
-            validationMessage = "提示词太短，请提供更详细的描述";
-            suggestions.Add("添加更多关于漫画风格、角色和场景的描述");
-        }
-        else if (editedPrompt.Length > 2000)
-        {
-            validationMessage = "提示词太长，请简化描述";
-            suggestions.Add("保留核心要素，删除不必要的细节");
-        }
+            await JSRuntime.InvokeVoidAsync("logInfo", "Validating prompt", new {
+                length = editedPrompt.Length,
+                isEmpty = string.IsNullOrWhiteSpace(editedPrompt),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_VALIDATION");
 
-        // 检查是否包含数学相关内容
-        var mathKeywords = new[] { "数学", "计算", "公式", "图形", "数字", "运算", "方程", "几何", "代数", "统计" };
-        if (!mathKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
-        {
-            suggestions.Add("建议在提示词中明确包含数学概念相关的关键词");
-        }
+            if (string.IsNullOrWhiteSpace(editedPrompt))
+            {
+                validationMessage = "Prompt cannot be empty";
+                await JSRuntime.InvokeVoidAsync("logValidation", "PromptEditor", "prompt", false, "Empty prompt");
+                return;
+            }
 
-        // 检查是否包含漫画相关描述
-        var comicKeywords = new[] { "漫画", "面板", "角色", "对话", "场景", "故事", "情节" };
-        if (!comicKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase)))
-        {
-            suggestions.Add("建议添加漫画结构和视觉元素的描述");
-        }
+            if (editedPrompt.Length < 10)
+            {
+                validationMessage = "Prompt too short, please provide more detailed description";
+                suggestions.Add("Add more descriptions about comic style, characters and scenes");
+                await JSRuntime.InvokeVoidAsync("logValidation", "PromptEditor", "prompt", false, "Prompt too short");
+            }
+            else if (editedPrompt.Length > 2000)
+            {
+                validationMessage = "Prompt too long, please simplify description";
+                suggestions.Add("Keep core elements, remove unnecessary details");
+                await JSRuntime.InvokeVoidAsync("logValidation", "PromptEditor", "prompt", false, "Prompt too long");
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("logValidation", "PromptEditor", "prompt", true, null);
+            }
 
-        StateHasChanged();
+            // 检查是否包含数学相关内容
+            var mathKeywords = new[] { "math", "calculation", "formula", "graph", "number", "operation", "equation", "geometry", "algebra", "statistics", "数学", "计算", "公式", "图形", "数字", "运算", "方程", "几何", "代数", "统计" };
+            var hasMathContent = mathKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+            
+            if (!hasMathContent)
+            {
+                suggestions.Add("Suggest including math concept related keywords in the prompt");
+            }
+
+            // 检查是否包含漫画相关描述
+            var comicKeywords = new[] { "comic", "panel", "character", "dialogue", "scene", "story", "plot", "漫画", "面板", "角色", "对话", "场景", "故事", "情节" };
+            var hasComicContent = comicKeywords.Any(keyword => editedPrompt.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+            
+            if (!hasComicContent)
+            {
+                suggestions.Add("Suggest adding comic structure and visual element descriptions");
+            }
+
+            await JSRuntime.InvokeVoidAsync("logInfo", "Prompt validation completed", new {
+                isValid = IsPromptValid(),
+                hasMathContent,
+                hasComicContent,
+                suggestionsCount = suggestions.Count,
+                validationMessage,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "PROMPT_VALIDATION");
+
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error during prompt validation", ex.Message, "VALIDATION_ERROR");
+        }
     }
 
     private bool IsPromptValid()

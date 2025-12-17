@@ -76,9 +76,10 @@ public class GenerationOptionsProcessor : IGenerationOptionsProcessor
             return new GenerationOptions
             {
                 PanelCount = 4,
-                AgeGroup = AgeGroup.Elementary,
+                AgeGroup = AgeGroup.Elementary, // 默认小学及以上
                 VisualStyle = VisualStyle.Cartoon,
-                Language = Language.Chinese
+                Language = Language.Chinese,
+                EnablePinyin = true // 默认开启拼音
             };
         }
 
@@ -88,7 +89,8 @@ public class GenerationOptionsProcessor : IGenerationOptionsProcessor
             PanelCount = options.PanelCount >= 3 && options.PanelCount <= 6 ? options.PanelCount : 4,
             AgeGroup = Enum.IsDefined(typeof(AgeGroup), options.AgeGroup) ? options.AgeGroup : AgeGroup.Elementary,
             VisualStyle = Enum.IsDefined(typeof(VisualStyle), options.VisualStyle) ? options.VisualStyle : VisualStyle.Cartoon,
-            Language = Enum.IsDefined(typeof(Language), options.Language) ? options.Language : Language.Chinese
+            Language = Enum.IsDefined(typeof(Language), options.Language) ? options.Language : Language.Chinese,
+            EnablePinyin = options.EnablePinyin // 保持用户设置
         };
 
         return result;
@@ -101,16 +103,15 @@ public class GenerationOptionsProcessor : IGenerationOptionsProcessor
             PanelCount = options.PanelCount,
             AgeGroup = ageGroup,
             VisualStyle = options.VisualStyle,
-            Language = options.Language
+            Language = options.Language,
+            EnablePinyin = options.EnablePinyin
         };
 
         // 根据年龄组调整面板数量
         adjusted.PanelCount = ageGroup switch
         {
             AgeGroup.Preschool => Math.Min(options.PanelCount, 4), // 学龄前儿童最多4个面板
-            AgeGroup.Elementary => options.PanelCount, // 小学生可以处理标准数量
-            AgeGroup.MiddleSchool => options.PanelCount, // 中学生可以处理标准数量
-            AgeGroup.HighSchool => Math.Max(options.PanelCount, 4), // 高中生至少4个面板
+            AgeGroup.Elementary => options.PanelCount, // 小学及以上可以处理标准数量
             _ => options.PanelCount
         };
 
@@ -132,9 +133,7 @@ public class GenerationOptionsProcessor : IGenerationOptionsProcessor
         var isConsistent = options.AgeGroup switch
         {
             AgeGroup.Preschool => options.PanelCount <= 4, // 学龄前儿童不应超过4个面板
-            AgeGroup.Elementary => options.PanelCount >= 3 && options.PanelCount <= 6,
-            AgeGroup.MiddleSchool => options.PanelCount >= 3 && options.PanelCount <= 6,
-            AgeGroup.HighSchool => options.PanelCount >= 4 && options.PanelCount <= 6,
+            AgeGroup.Elementary => options.PanelCount >= 3 && options.PanelCount <= 6, // 小学及以上
             _ => false
         };
 

@@ -16,6 +16,7 @@ public class ComicGenerationServiceTests
     {
         _mockGeminiService = new Mock<IGeminiAPIService>();
         _mockLogger = new Mock<ILogger<ComicGenerationService>>();
+        
         _service = new ComicGenerationService(_mockGeminiService.Object, _mockLogger.Object);
     }
 
@@ -27,7 +28,7 @@ public class ComicGenerationServiceTests
 
         // Assert
         Assert.False(result.IsValid);
-        Assert.Contains("请输入数学知识点", result.ErrorMessage);
+        Assert.Contains("请输入学习内容", result.ErrorMessage);
     }
 
     [Fact]

@@ -50,8 +50,7 @@ public class StorageService : IStorageService
             // 保存元数据
             await SaveMetadataAsync(comic);
 
-            // 生成并保存面板图片（占位符实现）
-            await GenerateAndSavePanelImagesAsync(comic, comicDirectory);
+            // 面板图片已经在ComicGenerationService中生成，这里不需要重复生成
 
             // 创建导出格式
             await CreateExportFormatsAsync(comic, comicDirectory);

@@ -475,6 +475,39 @@ public class ComicController : ControllerBase
     }
 
     /// <summary>
+    /// 保存漫画
+    /// </summary>
+    /// <param name="comic">要保存的漫画</param>
+    /// <returns>保存结果</returns>
+    [HttpPost("save")]
+    public async Task<ActionResult<string>> SaveComic([FromBody] MultiPanelComic comic)
+    {
+        try
+        {
+            _logger.LogInformation("Saving comic: {ComicId}", comic.Id);
+
+            var comicId = await _storageService.SaveComicAsync(comic);
+            
+            return Ok(new { 
+                message = "漫画保存成功", 
+                comicId = comicId,
+                success = true 
+            });
+        }
+        catch (Exception ex)
+        {
+            await _errorLogging.LogErrorAsync(ex, "Failed to save comic", new Dictionary<string, object>
+            {
+                { "comicId", comic.Id },
+                { "title", comic.Title }
+            });
+            
+            _logger.LogError(ex, "Error saving comic: {ComicId}", comic.Id);
+            return StatusCode(500, new { error = "保存漫画时发生错误" });
+        }
+    }
+
+    /// <summary>
     /// 验证数学概念
     /// </summary>
     /// <param name="request">验证请求</param>

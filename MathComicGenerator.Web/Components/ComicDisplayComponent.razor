@@ -168,6 +168,41 @@
 
     private ComicPanel? selectedPanel;
 
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "ComicDisplayComponent initialized", new {
+                hasComic = Comic != null,
+                isLoading = IsLoading,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_INIT");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logInfo", "ComicDisplayComponent parameters updated", new {
+                hasComic = Comic != null,
+                comicId = Comic?.Id,
+                comicTitle = Comic?.Title,
+                panelCount = Comic?.Panels.Count ?? 0,
+                isLoading = IsLoading,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "COMPONENT_UPDATE");
+        }
+        catch (InvalidOperationException)
+        {
+            // Ignore JS interop errors during prerendering
+        }
+    }
+
     private int GetColumnSize()
     {
         if (Comic == null) return 12;
@@ -184,44 +219,141 @@
 
     private async Task SaveComic()
     {
-        if (Comic != null)
+        try
         {
-            await OnSave.InvokeAsync(Comic);
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "save",
+                action = "save_comic",
+                comicId = Comic?.Id,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            if (Comic != null)
+            {
+                await JSRuntime.InvokeVoidAsync("logInfo", "Saving comic", new {
+                    comicId = Comic.Id,
+                    title = Comic.Title,
+                    panelCount = Comic.Panels.Count,
+                    timestamp = DateTime.Now.ToString("HH:mm:ss")
+                }, "COMIC_SAVE");
+
+                await OnSave.InvokeAsync(Comic);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("logWarn", "Attempted to save null comic", null, "COMIC_SAVE");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error saving comic", ex.Message, "COMIC_SAVE");
         }
     }
 
     private async Task ShareComic()
     {
-        if (Comic != null)
+        try
         {
-            await OnShare.InvokeAsync(Comic);
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "share",
+                action = "share_comic",
+                comicId = Comic?.Id,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            if (Comic != null)
+            {
+                await JSRuntime.InvokeVoidAsync("logInfo", "Sharing comic", new {
+                    comicId = Comic.Id,
+                    title = Comic.Title,
+                    timestamp = DateTime.Now.ToString("HH:mm:ss")
+                }, "COMIC_SHARE");
+
+                await OnShare.InvokeAsync(Comic);
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("logWarn", "Attempted to share null comic", null, "COMIC_SHARE");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error sharing comic", ex.Message, "COMIC_SHARE");
         }
     }
 
     private async Task ExportComic(ExportFormat format)
     {
-        if (Comic != null)
+        try
         {
-            await OnExport.InvokeAsync((Comic, format));
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "export",
+                action = "export_comic",
+                format = format.ToString(),
+                comicId = Comic?.Id,
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            if (Comic != null)
+            {
+                await JSRuntime.InvokeVoidAsync("logInfo", "Exporting comic", new {
+                    comicId = Comic.Id,
+                    title = Comic.Title,
+                    format = format.ToString(),
+                    timestamp = DateTime.Now.ToString("HH:mm:ss")
+                }, "COMIC_EXPORT");
+
+                await OnExport.InvokeAsync((Comic, format));
+            }
+            else
+            {
+                await JSRuntime.InvokeVoidAsync("logWarn", "Attempted to export null comic", null, "COMIC_EXPORT");
+            }
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error exporting comic", ex.Message, "COMIC_EXPORT");
         }
     }
 
     private async Task ShowImageModal(ComicPanel panel)
     {
-        selectedPanel = panel;
-        var modalElement = await JSRuntime.InvokeAsync<IJSObjectReference>("document.getElementById", "imageModal");
-        var modalInstance = await JSRuntime.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", modalElement);
-        await modalInstance.InvokeVoidAsync("show");
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("logUserClick", new {
+                button = "panel_image",
+                action = "show_image_modal",
+                panelOrder = panel.Order,
+                hasImage = !string.IsNullOrEmpty(panel.ImageUrl),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, null);
+
+            selectedPanel = panel;
+            
+            await JSRuntime.InvokeVoidAsync("logInfo", "Opening image modal", new {
+                panelOrder = panel.Order,
+                imageUrl = panel.ImageUrl,
+                hasDialogue = panel.Dialogue.Any(),
+                hasNarration = !string.IsNullOrEmpty(panel.Narration),
+                timestamp = DateTime.Now.ToString("HH:mm:ss")
+            }, "IMAGE_MODAL");
+
+            var modalElement = await JSRuntime.InvokeAsync<IJSObjectReference>("document.getElementById", "imageModal");
+            var modalInstance = await JSRuntime.InvokeAsync<IJSObjectReference>("bootstrap.Modal.getOrCreateInstance", modalElement);
+            await modalInstance.InvokeVoidAsync("show");
+        }
+        catch (Exception ex)
+        {
+            await JSRuntime.InvokeVoidAsync("logError", "Error showing image modal", ex.Message, "IMAGE_MODAL");
+        }
     }
 
     private string GetAgeGroupDisplay(AgeGroup ageGroup)
     {
         return ageGroup switch
         {
-            AgeGroup.Preschool => "学龄前 (3-5岁)",
-            AgeGroup.Elementary => "小学 (6-11岁)",
-            AgeGroup.MiddleSchool => "中学 (12-14岁)",
-            AgeGroup.HighSchool => "高中 (15-18岁)",
+            AgeGroup.Preschool => "学龄前 (5-6岁)",
+            AgeGroup.Elementary => "小学及以上 (6岁以上)",
             _ => "未知"
         };
     }
