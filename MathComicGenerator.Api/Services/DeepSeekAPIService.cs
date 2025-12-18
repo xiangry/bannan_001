@@ -28,19 +28,21 @@ public class DeepSeekAPIService : IDeepSeekAPIService
                   ?? new DeepSeekAPIConfiguration();
 
         // 配置重试策略
+        // 仅在网络异常或非成功HTTP状态码时重试，不对超时（TaskCanceled）进行重试，避免累计长时间阻塞
         _retryPolicy = Policy
             .Handle<HttpRequestException>()
-            .Or<TaskCanceledException>()
             .OrResult<HttpResponseMessage>(r => !r.IsSuccessStatusCode)
             .WaitAndRetryAsync(
-                retryCount: _config.MaxRetries,
+                retryCount: Math.Max(0, _config.MaxRetries),
                 sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                 onRetry: (outcome, timespan, retryCount, context) =>
                 {
-                    _logger.LogWarning("DeepSeek API retry attempt {RetryCount} after {Delay}ms", 
-                        retryCount, timespan.TotalMilliseconds);
+                    _logger.LogWarning("DeepSeek API retry attempt {RetryCount} after {Delay}ms due to {Reason}", 
+                        retryCount, timespan.TotalMilliseconds, outcome.Exception?.Message ?? (outcome.Result != null ? outcome.Result.StatusCode.ToString() : "Unknown"));
                 });
-
+                
+        _logger.LogInformation("DeepSeek retry policy configured: MaxRetries={MaxRetries}, TimeoutSeconds={TimeoutSeconds}", _config.MaxRetries, _config.TimeoutSeconds);
+ 
         ConfigureHttpClient();
     }
 
@@ -91,40 +93,43 @@ public class DeepSeekAPIService : IDeepSeekAPIService
             Directory.CreateDirectory(Path.GetDirectoryName(debugFile)!);
             await File.WriteAllTextAsync(debugFile, requestJson);
             
-            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
-
+            // 每次重试都创建新的 HttpContent，避免重用导致的问题
             var requestStart = DateTime.UtcNow;
             var response = await _retryPolicy.ExecuteAsync(async () =>
             {
-                return await _httpClient.PostAsync("/chat/completions", content);
+                using var attemptContent = new StringContent(requestJson, Encoding.UTF8, "application/json");
+                return await _httpClient.PostAsync("/chat/completions", attemptContent);
             });
             var requestDuration = DateTime.UtcNow - requestStart;
 
-            // 写入响应调试文件，方便离线分析（避免记录完整API密钥）
-            try
-            {
-                var debugResponse = new
-                {
-                    Timestamp = DateTime.UtcNow,
-                    Url = _httpClient.BaseAddress + "/chat/completions",
-                    RequestPreview = requestJson.Length > 200 ? requestJson.Substring(0, 200) + "..." : requestJson,
-                    ResponseStatus = response.StatusCode.ToString(),
-                    DurationMs = (long)requestDuration.TotalMilliseconds
-                };
+            // 记录响应状态与耗时，便于排查长耗时请求
+            _logger.LogInformation("DeepSeek API responded with {Status} in {Duration}ms", response.StatusCode, (long)requestDuration.TotalMilliseconds);
+ 
+             // 写入响应调试文件，方便离线分析（避免记录完整API密钥）
+             try
+             {
+                 var debugResponse = new
+                 {
+                     Timestamp = DateTime.UtcNow,
+                     Url = _httpClient.BaseAddress + "/chat/completions",
+                     RequestPreview = requestJson.Length > 200 ? requestJson.Substring(0, 200) + "..." : requestJson,
+                     ResponseStatus = response.StatusCode.ToString(),
+                     DurationMs = (long)requestDuration.TotalMilliseconds
+                 };
 
-                var responseContentForFile = await response.Content.ReadAsStringAsync();
-                var debugObj = new {
-                    debug = debugResponse,
-                    ResponseBodyPreview = responseContentForFile.Length > 2000 ? responseContentForFile.Substring(0, 2000) + "..." : responseContentForFile
-                };
-                var debugFilePath = Path.Combine(Directory.GetCurrentDirectory(), "logs", $"deepseek-response-{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}.json");
-                Directory.CreateDirectory(Path.GetDirectoryName(debugFilePath)!);
-                await File.WriteAllTextAsync(debugFilePath, JsonSerializer.Serialize(debugObj, GetJsonOptions()));
-            }
-            catch
-            {
-                // 忽略调试写入错误，避免影响正常流程
-            }
+                 var responseContentForFile = await response.Content.ReadAsStringAsync();
+                 var debugObj = new {
+                     debug = debugResponse,
+                     ResponseBodyPreview = responseContentForFile.Length > 2000 ? responseContentForFile.Substring(0, 2000) + "..." : responseContentForFile
+                 };
+                 var debugFilePath = Path.Combine(Directory.GetCurrentDirectory(), "logs", $"deepseek-response-{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}.json");
+                 Directory.CreateDirectory(Path.GetDirectoryName(debugFilePath)!);
+                 await File.WriteAllTextAsync(debugFilePath, JsonSerializer.Serialize(debugObj, GetJsonOptions()));
+             }
+             catch
+             {
+                 // 忽略调试写入错误，避免影响正常流程
+             }
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();
@@ -365,8 +370,8 @@ public class DeepSeekAPIConfiguration
     public string BaseUrl { get; set; } = "https://api.deepseek.com/v1";
     public string ApiKey { get; set; } = "";
     public string Model { get; set; } = "deepseek-chat";
-    public int TimeoutSeconds { get; set; } = 30;
-    public int MaxRetries { get; set; } = 3;
+    public int TimeoutSeconds { get; set; } = 120;
+    public int MaxRetries { get; set; } = 1;
     public float Temperature { get; set; } = 0.7f;
     public int MaxTokens { get; set; } = 2048;
     public float TopP { get; set; } = 0.95f;

@@ -33,7 +33,22 @@ public class PromptGenerationService : IPromptGenerationService
             _logger.LogInformation("Calling DeepSeek API service with systemPrompt length: {SystemLength}, userPrompt length: {UserLength}", 
                 systemPrompt.Length, userPrompt.Length);
 
-            var response = await _deepSeekService.GeneratePromptAsync(systemPrompt, userPrompt);
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var response = string.Empty;
+            try
+            {
+                response = await _deepSeekService.GeneratePromptAsync(systemPrompt, userPrompt);
+                sw.Stop();
+                _logger.LogInformation("DeepSeek service returned in {ElapsedMs}ms, response length: {Len}", sw.ElapsedMilliseconds, response?.Length ?? 0);
+                var preview = response != null && response.Length > 500 ? response.Substring(0, 500) + "..." : response;
+                _logger.LogDebug("DeepSeek response preview: {Preview}", preview);
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                _logger.LogError(ex, "DeepSeek service failed after {ElapsedMs}ms", sw.ElapsedMilliseconds);
+                throw;
+            }
 
             var generatedPrompt = ExtractPromptFromResponse(response);
             var suggestions = ExtractSuggestionsFromResponse(response);
