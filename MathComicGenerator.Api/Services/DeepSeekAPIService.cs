@@ -93,11 +93,38 @@ public class DeepSeekAPIService : IDeepSeekAPIService
             
             var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
+            var requestStart = DateTime.UtcNow;
             var response = await _retryPolicy.ExecuteAsync(async () =>
             {
                 return await _httpClient.PostAsync("/chat/completions", content);
             });
+            var requestDuration = DateTime.UtcNow - requestStart;
 
+            // 写入响应调试文件，方便离线分析（避免记录完整API密钥）
+            try
+            {
+                var debugResponse = new
+                {
+                    Timestamp = DateTime.UtcNow,
+                    Url = _httpClient.BaseAddress + "/chat/completions",
+                    RequestPreview = requestJson.Length > 200 ? requestJson.Substring(0, 200) + "..." : requestJson,
+                    ResponseStatus = response.StatusCode.ToString(),
+                    DurationMs = (long)requestDuration.TotalMilliseconds
+                };
+
+                var responseContentForFile = await response.Content.ReadAsStringAsync();
+                var debugObj = new {
+                    debug = debugResponse,
+                    ResponseBodyPreview = responseContentForFile.Length > 2000 ? responseContentForFile.Substring(0, 2000) + "..." : responseContentForFile
+                };
+                var debugFilePath = Path.Combine(Directory.GetCurrentDirectory(), "logs", $"deepseek-response-{DateTime.UtcNow:yyyyMMdd_HHmmss_fff}.json");
+                Directory.CreateDirectory(Path.GetDirectoryName(debugFilePath)!);
+                await File.WriteAllTextAsync(debugFilePath, JsonSerializer.Serialize(debugObj, GetJsonOptions()));
+            }
+            catch
+            {
+                // 忽略调试写入错误，避免影响正常流程
+            }
             if (!response.IsSuccessStatusCode)
             {
                 var errorContent = await response.Content.ReadAsStringAsync();

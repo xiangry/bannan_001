@@ -2,6 +2,7 @@ using MathComicGenerator.Shared.Interfaces;
 using MathComicGenerator.Shared.Models;
 using MathComicGenerator.Shared.Services;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace MathComicGenerator.Api.Services;
 
@@ -598,53 +599,79 @@ public class ComicGenerationService : IComicGenerationService
     {
         try
         {
-            // 尝试从响应中提取漫画内容
+            // 如果响应看起来像JSON，尝试直接反序列化
+            var trimmed = response.Trim();
+            if ((trimmed.StartsWith("{") && trimmed.EndsWith("}")) || trimmed.StartsWith("["))
+            {
+                try
+                {
+                    var doc = JsonSerializer.Deserialize<ComicContent>(trimmed, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                    if (doc != null && doc.Panels != null && doc.Panels.Count > 0)
+                    {
+                        return doc;
+                    }
+                }
+                catch (JsonException) { /* 忽略，继续使用文本解析 */ }
+            }
+
+            // 解析Markdown风格的面板描述
             var lines = response.Split('\n', StringSplitOptions.RemoveEmptyEntries);
             var title = "数学漫画";
             var panels = new List<PanelContent>();
 
-            // 简单的解析逻辑
             var currentPanel = new PanelContent();
-            var panelCount = 0;
-
             foreach (var line in lines)
             {
                 var trimmedLine = line.Trim();
-                
-                if (trimmedLine.Contains("标题") || trimmedLine.Contains("title"))
+                if (trimmedLine.StartsWith("#"))
                 {
-                    title = ExtractTitle(trimmedLine);
+                    title = trimmedLine.TrimStart('#').Trim();
+                    continue;
                 }
-                else if (trimmedLine.Contains("面板") || trimmedLine.Contains("panel"))
+
+                if (trimmedLine.StartsWith("Panel", StringComparison.OrdinalIgnoreCase) || trimmedLine.StartsWith("面板") || trimmedLine.StartsWith("- Panel") || trimmedLine.StartsWith("- 面板"))
                 {
                     if (currentPanel.ImageDescription != null)
                     {
                         panels.Add(currentPanel);
                     }
                     currentPanel = new PanelContent();
-                    panelCount++;
+                    continue;
                 }
-                else if (trimmedLine.Contains("图像") || trimmedLine.Contains("场景"))
+
+                if (trimmedLine.StartsWith("Image:", StringComparison.OrdinalIgnoreCase) || trimmedLine.StartsWith("图像:") || trimmedLine.StartsWith("场景:"))
                 {
                     currentPanel.ImageDescription = ExtractContent(trimmedLine);
+                    continue;
                 }
-                else if (trimmedLine.Contains("对话") || trimmedLine.Contains("dialogue"))
+
+                if (trimmedLine.StartsWith("Dialogue:", StringComparison.OrdinalIgnoreCase) || trimmedLine.StartsWith("对话:"))
                 {
-                    currentPanel.Dialogue = new List<string> { ExtractContent(trimmedLine) };
+                    var content = ExtractContent(trimmedLine);
+                    currentPanel.Dialogue = new List<string> { content };
+                    continue;
                 }
-                else if (trimmedLine.Contains("旁白") || trimmedLine.Contains("narration"))
+
+                if (trimmedLine.StartsWith("Narration:", StringComparison.OrdinalIgnoreCase) || trimmedLine.StartsWith("旁白:"))
                 {
                     currentPanel.Narration = ExtractContent(trimmedLine);
+                    continue;
+                }
+
+                // 其他行作为对话追加
+                if (!string.IsNullOrEmpty(trimmedLine))
+                {
+                    if (currentPanel.Dialogue == null) currentPanel.Dialogue = new List<string>();
+                    currentPanel.Dialogue.Add(trimmedLine);
                 }
             }
 
-            // 添加最后一个面板
             if (currentPanel.ImageDescription != null)
             {
                 panels.Add(currentPanel);
             }
 
-            // 确保至少有3个面板
+            // Ensure at least 3 panels
             while (panels.Count < 3)
             {
                 panels.Add(CreateDefaultPanel(panels.Count + 1));

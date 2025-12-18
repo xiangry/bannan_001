@@ -306,12 +306,14 @@ public class ComicController : ControllerBase
     /// <param name="request">提示词生成请求</param>
     /// <returns>生成的提示词</returns>
     [HttpPost("generate-prompt")]
-    public async Task<ActionResult<PromptGenerationResponse>> GeneratePrompt([FromBody] PromptGenerationRequest request)
+    public async Task<ActionResult<MathComicGenerator.Shared.Models.ApiResponse<PromptGenerationResponse>>> GeneratePrompt([FromBody] PromptGenerationRequest request)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
@@ -336,7 +338,23 @@ public class ComicController : ControllerBase
 
             _logger.LogInformation("Prompt generated successfully: {PromptId}", promptResponse.Id);
 
-            return Ok(promptResponse);
+            sw.Stop();
+
+            // 返回统一的包装格式，便于前端解析
+            var apiResp = new MathComicGenerator.Shared.Models.ApiResponse<PromptGenerationResponse>
+            {
+                Success = true,
+                StatusCode = 200,
+                Data = promptResponse,
+                Timestamp = DateTime.UtcNow,
+                ProcessingTime = $"{sw.ElapsedMilliseconds}ms",
+                RequestId = Guid.NewGuid().ToString("N").Substring(0,8)
+            };
+
+            // 同步暴露处理耗时到响应头，方便前端快速读取
+            try { Response.Headers["ProcessingTime"] = sw.ElapsedMilliseconds.ToString(); } catch { /* ignore header write errors */ }
+
+            return Ok(apiResp);
         }
         catch (ResourceLimitException ex)
         {
@@ -355,7 +373,7 @@ public class ComicController : ControllerBase
                 { "concept", request.MathConcept },
                 { "options", request.Options }
             });
-            
+
             _logger.LogError(ex, "Unexpected error during prompt generation");
             return StatusCode(500, new { error = "生成提示词时发生错误，请稍后重试" });
         }
@@ -371,12 +389,14 @@ public class ComicController : ControllerBase
     /// <param name="request">漫画图片生成请求</param>
     /// <returns>生成的漫画</returns>
     [HttpPost("generate-from-prompt")]
-    public async Task<ActionResult<MultiPanelComic>> GenerateComicFromPrompt([FromBody] ComicImageGenerationRequest request)
+    public async Task<ActionResult<MathComicGenerator.Shared.Models.ApiResponse<MultiPanelComic>>> GenerateComicFromPrompt([FromBody] ComicImageGenerationRequest request)
     {
         if (!ModelState.IsValid)
         {
             return BadRequest(ModelState);
         }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
         try
         {
@@ -400,7 +420,21 @@ public class ComicController : ControllerBase
 
             _logger.LogInformation("Comic generated from prompt and saved successfully: {ComicId}", comicId);
 
-            return Ok(comic);
+            sw.Stop();
+
+            var apiResp = new MathComicGenerator.Shared.Models.ApiResponse<MultiPanelComic>
+            {
+                Success = true,
+                StatusCode = 200,
+                Data = comic,
+                Timestamp = DateTime.UtcNow,
+                ProcessingTime = $"{sw.ElapsedMilliseconds}ms",
+                RequestId = Guid.NewGuid().ToString("N").Substring(0,8)
+            };
+
+            try { Response.Headers["ProcessingTime"] = sw.ElapsedMilliseconds.ToString(); } catch { }
+
+            return Ok(apiResp);
         }
         catch (ResourceLimitException ex)
         {
@@ -420,7 +454,7 @@ public class ComicController : ControllerBase
                 { "prompt", request.EditedPrompt },
                 { "options", request.Options }
             });
-            
+
             _logger.LogError(ex, "Unexpected error during comic generation from prompt");
             return StatusCode(500, new { error = "根据提示词生成漫画时发生错误，请稍后重试" });
         }

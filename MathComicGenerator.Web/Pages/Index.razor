@@ -164,28 +164,44 @@
 
                 var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", requestData);
 
+                var apiElapsed = response.Headers.Contains("ProcessingTime") ? response.Headers.GetValues("ProcessingTime").FirstOrDefault() : null;
+
                 if (response.IsSuccessStatusCode)
                 {
                     // 解析包装的响应格式
-                    var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PromptGenerationResponse>>();
-                    
+                    MathComicGenerator.Shared.Models.ApiResponse<PromptGenerationResponse>? wrappedResponse = null;
+                    try
+                    {
+                        wrappedResponse = await response.Content.ReadFromJsonAsync<MathComicGenerator.Shared.Models.ApiResponse<PromptGenerationResponse>>();
+                    }
+                    catch (Exception parseEx)
+                    {
+                        var raw = await response.Content.ReadAsStringAsync();
+                        await LogErrorAsync("Prompt response JSON parse failed", parseEx, raw);
+                        await ShowNotificationAsync($"提示词响应解析失败: {parseEx.Message}");
+                    }
+
                     // 非阻塞的API响应日志
                     _ = LogApiResponseAsync("POST", "/api/comic/generate-prompt", (int)response.StatusCode, wrappedResponse);
-                    
+
                     if (wrappedResponse?.Data != null)
                     {
                         currentPromptResponse = wrappedResponse.Data;
                         currentStep = GenerationStep.PromptEdit;
-                        
+
                         // 非阻塞的状态变化日志
                         _ = LogStateChangeAsync("Input", "PromptEdit", new { promptId = currentPromptResponse.Id });
-                        
-                        await ShowNotificationAsync($"提示词生成成功！ID: {currentPromptResponse.Id}");
+
+                        var notifyMsg = $"提示词生成成功！ID: {currentPromptResponse.Id}";
+                        if (!string.IsNullOrEmpty(wrappedResponse.ProcessingTime)) notifyMsg += $" (后端耗时: {wrappedResponse.ProcessingTime})";
+
+                        await ShowNotificationAsync(notifyMsg);
                     }
                     else
                     {
-                        await LogErrorAsync("Prompt response parsing failed", null, "Response data is null");
-                        await ShowNotificationAsync("提示词响应解析失败");
+                        await LogErrorAsync("Prompt response parsing failed", null, "Response data is null or parsing failed");
+                        var errorBody = await response.Content.ReadAsStringAsync();
+                        await ShowNotificationAsync($"提示词响应解析失败: {errorBody}");
                     }
                 }
                 else

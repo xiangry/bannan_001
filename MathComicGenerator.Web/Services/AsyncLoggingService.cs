@@ -285,9 +285,30 @@ public class AsyncLoggingService : IAsyncLoggingService, IDisposable
                     _ => "console.log"
                 };
 
-                await _jsRuntime.InvokeVoidAsync(consoleMethod,
-                    $"[{log.Timestamp:HH:mm:ss}] [{log.Category}] {log.Message}",
-                    log.Data);
+                try
+                {
+                    // Avoid calling JSRuntime from background thread in Blazor Server — use server-side logger instead
+                    _logger.Log(log.Level == "ERROR" ? Microsoft.Extensions.Logging.LogLevel.Error : 
+                                log.Level == "WARN" ? Microsoft.Extensions.Logging.LogLevel.Warning : Microsoft.Extensions.Logging.LogLevel.Information,
+                        "[{Timestamp}] [{Category}] {Message} - {Data}", log.Timestamp.ToString("HH:mm:ss"), log.Category, log.Message, log.Data);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to write log to server logger");
+                }
+
+                // If developer explicitly enabled console output and JSRuntime is available in a safe context, try calling it — but don't block on it
+                if (_config.EnableConsoleOutput)
+                {
+                    try
+                    {
+                        _ = _jsRuntime.InvokeVoidAsync("console.log", $"[{log.Timestamp:HH:mm:ss}] [{log.Category}] {log.Message}", log.Data);
+                    }
+                    catch
+                    {
+                        // Ignore JS interop failures from background thread
+                    }
+                }
             }
         }
         catch (Exception ex)
