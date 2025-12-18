@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.HttpsPolicy;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.JSInterop;
 using MathComicGenerator.Web.Data;
 using MathComicGenerator.Web.Services;
 using MathComicGenerator.Shared.Interfaces;
@@ -36,7 +37,8 @@ namespace MathComicGenerator.Web
             // 添加HttpClient服务，配置API基地址
             services.AddHttpClient("API", client =>
             {
-                client.BaseAddress = new Uri("http://localhost:5082/");
+                client.BaseAddress = new Uri("https://localhost:7109/");
+                client.Timeout = TimeSpan.FromSeconds(30);
             })
             .ConfigurePrimaryHttpMessageHandler(() =>
             {
@@ -49,9 +51,9 @@ namespace MathComicGenerator.Web
             // 注册默认HttpClient
             services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
             
-            // 注册性能优化服务
-            services.AddSingleton<IAsyncLoggingService, AsyncLoggingService>();
-            services.AddSingleton<IUIPerformanceService, UIPerformanceService>();
+            // 注册性能优化服务 - 改为 Scoped 以支持 IJSRuntime
+            services.AddScoped<IAsyncLoggingService, AsyncLoggingService>();
+            services.AddScoped<IUIPerformanceService, UIPerformanceService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

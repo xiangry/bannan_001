@@ -1,4 +1,4 @@
-﻿@page "/fetchdata"
+@page "/fetchdata"
 
 @using MathComicGenerator.Web.Data
 @inject WeatherForecastService ForecastService
@@ -37,7 +37,7 @@ else
 }
 
 @code {
-    WeatherForecast[] forecasts;
+    WeatherForecast[] forecasts = Array.Empty<WeatherForecast>();
 
     protected override async Task OnInitializedAsync()
     {

@@ -1,8 +1,10 @@
-﻿@page "/"
+@page "/"
 @using MathComicGenerator.Shared.Models
 @using MathComicGenerator.Web.Components
+@using Microsoft.JSInterop
 @inject HttpClient Http
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JSRuntime
 @inherits OptimizedComponentBase
 
 <PageTitle>数学漫画生成器</PageTitle>

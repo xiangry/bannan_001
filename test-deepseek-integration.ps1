@@ -177,8 +177,8 @@ Write-Host "📡 API状态: $apiUrl/api/comic/config-status" -ForegroundColor Wh
 
 Write-Host "`n🔧 配置说明:" -ForegroundColor Yellow
 Write-Host "• 当前使用DeepSeek API进行提示词生成" -ForegroundColor Gray
-Write-Host "• 需要在appsettings.json中配置DeepSeek API密钥" -ForegroundColor Gray
-Write-Host "• 如果没有API密钥，系统会回退到智能模拟数据" -ForegroundColor Gray
+Write-Host "• 必须在appsettings.json中配置有效的DeepSeek API密钥" -ForegroundColor Gray
+Write-Host "• 如果没有API密钥，系统会返回配置错误而不是模拟数据" -ForegroundColor Red
 
 Write-Host "`n🎯 下一步:" -ForegroundColor Magenta
 Write-Host "1. 配置DeepSeek API密钥以使用真实AI生成" -ForegroundColor White

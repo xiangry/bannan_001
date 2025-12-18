@@ -47,6 +47,60 @@ public class GlobalErrorHandlingMiddleware
     {
         return exception switch
         {
+            ConfigurationException configEx => new ErrorResponseInfo
+            {
+                StatusCode = (int)HttpStatusCode.InternalServerError,
+                Response = new ErrorResponse
+                {
+                    Error = "Configuration Error",
+                    Message = "系统配置错误",
+                    Details = GetUserFriendlyMessage(configEx.Message),
+                    Timestamp = DateTime.UtcNow,
+                    CanRetry = false,
+                    ResolutionSteps = configEx.ResolutionSteps
+                }
+            },
+            AuthenticationException authEx => new ErrorResponseInfo
+            {
+                StatusCode = (int)HttpStatusCode.Unauthorized,
+                Response = new ErrorResponse
+                {
+                    Error = "Authentication Error",
+                    Message = "认证失败",
+                    Details = GetUserFriendlyMessage(authEx.Message),
+                    Timestamp = DateTime.UtcNow,
+                    CanRetry = false,
+                    ResolutionSteps = authEx.ResolutionSteps
+                }
+            },
+            NetworkException netEx => new ErrorResponseInfo
+            {
+                StatusCode = (int)HttpStatusCode.ServiceUnavailable,
+                Response = new ErrorResponse
+                {
+                    Error = "Network Error",
+                    Message = "网络连接错误",
+                    Details = GetUserFriendlyMessage(netEx.Message),
+                    Timestamp = DateTime.UtcNow,
+                    CanRetry = true,
+                    RetryAfter = TimeSpan.FromSeconds(30),
+                    ResolutionSteps = netEx.ResolutionSteps
+                }
+            },
+            DeepSeekAPIException deepSeekEx => new ErrorResponseInfo
+            {
+                StatusCode = (int)HttpStatusCode.ServiceUnavailable,
+                Response = new ErrorResponse
+                {
+                    Error = "AI Service Error",
+                    Message = "AI服务暂时不可用",
+                    Details = GetUserFriendlyMessage(deepSeekEx.Message),
+                    Timestamp = DateTime.UtcNow,
+                    CanRetry = true,
+                    RetryAfter = TimeSpan.FromMinutes(1),
+                    ResolutionSteps = deepSeekEx.ResolutionSteps
+                }
+            },
             ArgumentNullException nullEx => new ErrorResponseInfo
             {
                 StatusCode = (int)HttpStatusCode.BadRequest,
@@ -201,4 +255,5 @@ public class ErrorResponse
     public bool CanRetry { get; set; }
     public TimeSpan? RetryAfter { get; set; }
     public string? TraceId { get; set; }
+    public string[] ResolutionSteps { get; set; } = Array.Empty<string>();
 }

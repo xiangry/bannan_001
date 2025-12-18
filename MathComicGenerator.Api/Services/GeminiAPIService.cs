@@ -112,35 +112,72 @@ public class GeminiAPIService : IGeminiAPIService
             {
                 UserMessage = "请求超时，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(30)
+                RetryAfter = TimeSpan.FromSeconds(30),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待30秒后重试",
+                    "2. 检查网络连接是否稳定",
+                    "3. 如果问题持续，请联系技术支持"
+                }
             },
             "RATE_LIMIT" => new ErrorResponse
             {
                 UserMessage = "请求过于频繁，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromMinutes(1)
+                RetryAfter = TimeSpan.FromMinutes(1),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待1分钟后重试",
+                    "2. 减少请求频率",
+                    "3. 考虑升级API配额"
+                }
             },
             "QUOTA_EXCEEDED" => new ErrorResponse
             {
                 UserMessage = "API配额已用完，请联系管理员",
-                ShouldRetry = false
+                ShouldRetry = false,
+                ResolutionSteps = new[]
+                {
+                    "1. 检查API配额使用情况",
+                    "2. 联系管理员增加配额",
+                    "3. 等待配额重置时间"
+                }
             },
             "INVALID_REQUEST" => new ErrorResponse
             {
                 UserMessage = "请求格式错误，请检查输入内容",
-                ShouldRetry = false
+                ShouldRetry = false,
+                ResolutionSteps = new[]
+                {
+                    "1. 检查输入参数格式",
+                    "2. 确保所有必需字段都已提供",
+                    "3. 参考API文档验证请求格式"
+                }
             },
             "NETWORK_ERROR" => new ErrorResponse
             {
                 UserMessage = "网络连接错误，请检查网络连接",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(10)
+                RetryAfter = TimeSpan.FromSeconds(10),
+                ResolutionSteps = new[]
+                {
+                    "1. 检查网络连接",
+                    "2. 验证API端点是否可访问",
+                    "3. 检查防火墙设置",
+                    "4. 10秒后重试"
+                }
             },
             _ => new ErrorResponse
             {
                 UserMessage = "系统暂时不可用，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(60)
+                RetryAfter = TimeSpan.FromSeconds(60),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待1分钟后重试",
+                    "2. 检查系统状态页面",
+                    "3. 如果问题持续，请联系技术支持"
+                }
             }
         };
     }

@@ -57,8 +57,16 @@ public class DeepSeekAPIService : IDeepSeekAPIService
         // 检查API密钥是否配置
         if (string.IsNullOrEmpty(_config.ApiKey))
         {
-            _logger.LogWarning("DeepSeek API key not configured, using intelligent mock data");
-            return GenerateIntelligentMockPrompt(userPrompt);
+            _logger.LogError("DeepSeek API key not configured");
+            throw new ConfigurationException(
+                "API key is not configured. Please configure the DeepSeek API key in appsettings.json",
+                new[]
+                {
+                    "1. Open appsettings.json file",
+                    "2. Add or update the DeepSeekAPI:ApiKey configuration",
+                    "3. Obtain a valid API key from DeepSeek platform",
+                    "4. Restart the application"
+                });
         }
 
         try
@@ -104,11 +112,19 @@ public class DeepSeekAPIService : IDeepSeekAPIService
                 Console.WriteLine($"Failed Request: {requestJson}");
                 Console.WriteLine("==========================");
                 
-                // 如果是认证错误，回退到模拟数据
+                // 如果是认证错误，抛出异常
                 if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 {
-                    _logger.LogWarning("DeepSeek API authentication failed, falling back to mock data");
-                    return GenerateIntelligentMockPrompt(userPrompt);
+                    _logger.LogError("DeepSeek API authentication failed");
+                    throw new AuthenticationException(
+                        "API authentication failed. Please verify your API key",
+                        new[]
+                        {
+                            "1. Verify your API key is correct in appsettings.json",
+                            "2. Check if your API key has expired",
+                            "3. Ensure your account has sufficient credits",
+                            "4. Contact DeepSeek support if the issue persists"
+                        });
                 }
                 
                 throw new DeepSeekAPIException($"API request failed: {response.StatusCode}", 
@@ -136,45 +152,63 @@ public class DeepSeekAPIService : IDeepSeekAPIService
         catch (TaskCanceledException ex)
         {
             var timeoutMessage = $"DeepSeek API请求超时 (配置超时时间: {_config.TimeoutSeconds}秒)";
-            _logger.LogError(ex, "{TimeoutMessage}，异常详情: {ExceptionMessage}，回退到模拟数据", timeoutMessage, ex.Message);
-            throw new DeepSeekAPIException($"{timeoutMessage}: {ex.Message}", "TIMEOUT");
+            _logger.LogError(ex, "{TimeoutMessage}，异常详情: {ExceptionMessage}", timeoutMessage, ex.Message);
+            throw new TimeoutException(
+                $"{timeoutMessage}: {ex.Message}",
+                ex);
         }
         catch (HttpRequestException ex)
         {
             var networkMessage = $"DeepSeek API网络错误，BaseUrl: {_config.BaseUrl}";
-            _logger.LogError(ex, "{NetworkMessage}，异常详情: {ExceptionMessage}，回退到模拟数据", networkMessage, ex.Message);
-            throw new DeepSeekAPIException($"{networkMessage}: {ex.Message}", "NETWORK_ERROR");
+            _logger.LogError(ex, "{NetworkMessage}，异常详情: {ExceptionMessage}", networkMessage, ex.Message);
+            throw new NetworkException(
+                $"{networkMessage}: {ex.Message}",
+                ex,
+                new[]
+                {
+                    "1. Check your internet connection",
+                    "2. Verify the API endpoint URL is correct",
+                    "3. Check if DeepSeek service is available",
+                    "4. Try again after a few minutes"
+                });
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "解析DeepSeek API响应失败，异常详情: {ExceptionMessage}，回退到模拟数据", ex.Message);
-            throw new DeepSeekAPIException($"响应解析错误: {ex.Message}", "PARSE_ERROR");
+            _logger.LogError(ex, "解析DeepSeek API响应失败，异常详情: {ExceptionMessage}", ex.Message);
+            throw new DeepSeekAPIException(
+                $"响应解析错误: {ex.Message}", 
+                "PARSE_ERROR",
+                new[]
+                {
+                    "1. The API response format may have changed",
+                    "2. Check if the API is returning valid JSON",
+                    "3. Contact support if the issue persists"
+                });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "DeepSeek API意外错误，异常类型: {ExceptionType}，异常详情: {ExceptionMessage}，回退到模拟数据", 
+            _logger.LogError(ex, "DeepSeek API意外错误，异常类型: {ExceptionType}，异常详情: {ExceptionMessage}", 
                 ex.GetType().Name, ex.Message);
-            throw new DeepSeekAPIException($"意外错误 ({ex.GetType().Name}): {ex.Message}", "UNEXPECTED_ERROR");
+            throw new DeepSeekAPIException(
+                $"意外错误 ({ex.GetType().Name}): {ex.Message}", 
+                "UNEXPECTED_ERROR",
+                new[]
+                {
+                    "1. Check the application logs for more details",
+                    "2. Try the request again",
+                    "3. Contact technical support if the issue persists"
+                });
         }
     }
 
     public async Task<string> OptimizePromptAsync(string originalPrompt, string optimizationInstructions)
     {
-        try
-        {
-            _logger.LogInformation("Optimizing prompt using DeepSeek API");
+        _logger.LogInformation("Optimizing prompt using DeepSeek API");
 
-            var systemPrompt = "你是一个专业的提示词优化专家。请根据用户的要求优化提示词，使其更加清晰、具体和有效。";
-            var userPrompt = $"请优化以下提示词：\n\n原始提示词：\n{originalPrompt}\n\n优化要求：\n{optimizationInstructions}\n\n请返回优化后的提示词：";
+        var systemPrompt = "你是一个专业的提示词优化专家。请根据用户的要求优化提示词，使其更加清晰、具体和有效。";
+        var userPrompt = $"请优化以下提示词：\n\n原始提示词：\n{originalPrompt}\n\n优化要求：\n{optimizationInstructions}\n\n请返回优化后的提示词：";
 
-            return await GeneratePromptAsync(systemPrompt, userPrompt);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error optimizing prompt with DeepSeek API");
-            // 如果优化失败，返回原始提示词
-            return originalPrompt;
-        }
+        return await GeneratePromptAsync(systemPrompt, userPrompt);
     }
 
     public async Task<ErrorResponse> HandleAPIErrorAsync(APIError error)
@@ -187,35 +221,72 @@ public class DeepSeekAPIService : IDeepSeekAPIService
             {
                 UserMessage = "请求超时，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(30)
+                RetryAfter = TimeSpan.FromSeconds(30),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待30秒后重试",
+                    "2. 检查网络连接是否稳定",
+                    "3. 如果问题持续，请联系技术支持"
+                }
             },
             "RATE_LIMIT" => new ErrorResponse
             {
                 UserMessage = "请求过于频繁，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromMinutes(1)
+                RetryAfter = TimeSpan.FromMinutes(1),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待1分钟后重试",
+                    "2. 减少请求频率",
+                    "3. 考虑升级API配额"
+                }
             },
             "QUOTA_EXCEEDED" => new ErrorResponse
             {
                 UserMessage = "API配额已用完，请联系管理员",
-                ShouldRetry = false
+                ShouldRetry = false,
+                ResolutionSteps = new[]
+                {
+                    "1. 检查API配额使用情况",
+                    "2. 联系管理员增加配额",
+                    "3. 等待配额重置时间"
+                }
             },
             "INVALID_REQUEST" => new ErrorResponse
             {
                 UserMessage = "请求格式错误，请检查输入内容",
-                ShouldRetry = false
+                ShouldRetry = false,
+                ResolutionSteps = new[]
+                {
+                    "1. 检查输入参数格式",
+                    "2. 确保所有必需字段都已提供",
+                    "3. 参考API文档验证请求格式"
+                }
             },
             "NETWORK_ERROR" => new ErrorResponse
             {
                 UserMessage = "网络连接错误，请检查网络连接",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(10)
+                RetryAfter = TimeSpan.FromSeconds(10),
+                ResolutionSteps = new[]
+                {
+                    "1. 检查网络连接",
+                    "2. 验证API端点是否可访问",
+                    "3. 检查防火墙设置",
+                    "4. 10秒后重试"
+                }
             },
             _ => new ErrorResponse
             {
                 UserMessage = "系统暂时不可用，请稍后重试",
                 ShouldRetry = true,
-                RetryAfter = TimeSpan.FromSeconds(60)
+                RetryAfter = TimeSpan.FromSeconds(60),
+                ResolutionSteps = new[]
+                {
+                    "1. 等待1分钟后重试",
+                    "2. 检查系统状态页面",
+                    "3. 如果问题持续，请联系技术支持"
+                }
             }
         };
     }
@@ -247,143 +318,7 @@ public class DeepSeekAPIService : IDeepSeekAPIService
         };
     }
 
-    private string GenerateIntelligentMockPrompt(string userPrompt)
-    {
-        // 分析用户提示词，生成相应的智能模拟提示词
-        var lowerPrompt = userPrompt.ToLower();
-        
-        // 科学类知识点
-        if (lowerPrompt.Contains("牛顿") || lowerPrompt.Contains("定律") || lowerPrompt.Contains("物理"))
-        {
-            return @"提示词: 创建一个4格漫画，展示牛顿第一定律的概念。
 
-面板1: 一个小球静止在桌子上，旁边站着好奇的小明
-对话: 小明：为什么球不动呢？
-场景: 简洁的教室环境，卡通风格
-
-面板2: 小明轻推小球，球开始滚动
-对话: 小明：我推它，它就动了！
-场景: 展示力的作用过程
-
-面板3: 球撞到墙壁停下来
-对话: 小明：撞到墙就停了
-场景: 球与墙壁的接触
-
-面板4: 老师解释牛顿第一定律
-对话: 老师：这就是牛顿第一定律，物体保持原来的运动状态，除非有外力作用
-场景: 老师指着黑板上的公式
-
-改进建议:
-- 可以添加更多生活中的例子
-- 增加动画效果的描述
-- 强调惯性概念的重要性";
-        }
-        
-        // 数学类知识点
-        if (lowerPrompt.Contains("二次方程") || lowerPrompt.Contains("方程") || lowerPrompt.Contains("数学"))
-        {
-            return @"提示词: 创建一个4格漫画，生动展示二次方程的解法过程。
-
-面板1: 学生小红面对黑板上的二次方程 x²-5x+6=0，表情困惑
-对话: 小红：这个方程怎么解呢？
-场景: 明亮的教室，黑板上写着方程
-
-面板2: 老师介绍因式分解法
-对话: 老师：我们可以把它分解成两个因子相乘
-场景: 老师在黑板上写 (x-2)(x-3)=0
-
-面板3: 展示求解过程
-对话: 老师：所以 x-2=0 或 x-3=0
-场景: 黑板上显示 x=2 或 x=3
-
-面板4: 学生恍然大悟
-对话: 小红：原来如此！我明白了！
-场景: 学生开心的表情，周围有理解的光芒效果
-
-改进建议:
-- 可以添加图形化的解释
-- 增加验证步骤的演示
-- 提供更多解法的对比";
-        }
-        
-        // 历史类知识点
-        if (lowerPrompt.Contains("工业革命") || lowerPrompt.Contains("历史") || lowerPrompt.Contains("革命"))
-        {
-            return @"提示词: 创建一个4格漫画，展现工业革命对社会的深远影响。
-
-面板1: 18世纪的手工作坊，工人们手工制作产品
-对话: 工匠：我们一天只能做几件产品
-场景: 传统的手工作坊，工具简单
-
-面板2: 蒸汽机的发明和工厂的建立
-对话: 发明家：蒸汽机将改变一切！
-场景: 冒着蒸汽的机器，新建的工厂
-
-面板3: 大规模生产和城市化
-对话: 工人：现在我们一天能生产上百件！
-场景: 繁忙的工厂流水线，城市高楼
-
-面板4: 社会变革的全景
-对话: 旁白：工业革命改变了人类的生活方式
-场景: 对比图显示革命前后的巨大变化
-
-改进建议:
-- 可以加入更多技术发明的细节
-- 展示对不同社会阶层的影响
-- 强调环境和社会问题";
-        }
-        
-        // 语言类知识点
-        if (lowerPrompt.Contains("条件句") || lowerPrompt.Contains("英语") || lowerPrompt.Contains("语法"))
-        {
-            return @"提示词: 创建一个4格漫画，清晰解释英语条件句的用法和结构。
-
-面板1: 英语老师在黑板上写下 'If it rains, I will stay home'
-对话: 老师：今天我们学习条件句
-场景: 整洁的英语教室，学生们专注听讲
-
-面板2: 解释第一类条件句的结构
-对话: 老师：If + 现在时，主句用将来时
-场景: 黑板上标注语法结构，用不同颜色突出
-
-面板3: 学生练习造句
-对话: 学生：If I study hard, I will pass the exam!
-场景: 学生举手发言，其他同学点头认同
-
-面板4: 总结不同类型的条件句
-对话: 老师：很好！条件句帮我们表达假设和结果
-场景: 黑板上列出三种条件句类型的对比
-
-改进建议:
-- 可以添加更多实际生活例句
-- 用图示说明时态的对应关系
-- 增加练习互动的环节";
-        }
-        
-        // 默认通用提示词
-        return @"提示词: 创建一个4格教育漫画，生动有趣地展示所学知识点。
-
-面板1: 引入问题或概念，激发学习兴趣
-对话: 角色表达疑问或好奇
-场景: 适合的学习环境
-
-面板2: 展示核心概念或原理
-对话: 解释关键知识点
-场景: 清晰的演示或说明
-
-面板3: 深入理解或应用实例
-对话: 进一步阐述或举例
-场景: 具体的应用场景
-
-面板4: 总结和启发
-对话: 总结要点，表达理解
-场景: 积极正面的学习成果展示
-
-改进建议:
-- 根据具体知识点调整内容细节
-- 增加互动性和趣味性元素
-- 确保教育价值和年龄适宜性";
-    }
 
     private JsonSerializerOptions GetJsonOptions()
     {
@@ -498,15 +433,66 @@ public class DeepSeekUsage
 public class DeepSeekAPIException : Exception
 {
     public string ErrorCode { get; }
+    public string[] ResolutionSteps { get; }
 
-    public DeepSeekAPIException(string message, string errorCode) : base(message)
+    public DeepSeekAPIException(string message, string errorCode, string[]? resolutionSteps = null) : base(message)
     {
         ErrorCode = errorCode;
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
     }
 
-    public DeepSeekAPIException(string message, string errorCode, Exception innerException) 
+    public DeepSeekAPIException(string message, string errorCode, Exception innerException, string[]? resolutionSteps = null) 
         : base(message, innerException)
     {
         ErrorCode = errorCode;
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+}
+
+public class ConfigurationException : Exception
+{
+    public string[] ResolutionSteps { get; }
+
+    public ConfigurationException(string message, string[]? resolutionSteps = null) : base(message)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+
+    public ConfigurationException(string message, Exception innerException, string[]? resolutionSteps = null) 
+        : base(message, innerException)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+}
+
+public class AuthenticationException : Exception
+{
+    public string[] ResolutionSteps { get; }
+
+    public AuthenticationException(string message, string[]? resolutionSteps = null) : base(message)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+
+    public AuthenticationException(string message, Exception innerException, string[]? resolutionSteps = null) 
+        : base(message, innerException)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+}
+
+public class NetworkException : Exception
+{
+    public string[] ResolutionSteps { get; }
+
+    public NetworkException(string message, string[]? resolutionSteps = null) : base(message)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
+    }
+
+    public NetworkException(string message, Exception innerException, string[]? resolutionSteps = null) 
+        : base(message, innerException)
+    {
+        ResolutionSteps = resolutionSteps ?? Array.Empty<string>();
     }
 }

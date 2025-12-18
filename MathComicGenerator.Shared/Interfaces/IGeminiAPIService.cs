@@ -31,4 +31,5 @@ public class ErrorResponse
     public string UserMessage { get; set; } = string.Empty;
     public bool ShouldRetry { get; set; }
     public TimeSpan? RetryAfter { get; set; }
+    public string[] ResolutionSteps { get; set; } = Array.Empty<string>();
 }

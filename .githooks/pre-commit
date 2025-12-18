@@ -1,0 +1,19 @@
+#!/bin/sh
+# Local git hook wrapper that calls the repository's PowerShell helper to auto-commit
+# This file is intended to be installed into .git/hooks/pre-commit (use scripts/install_git_hooks.ps1)
+
+# Resolve repository root
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+
+# Run PowerShell script (use pwsh for PowerShell Core). Ignore failures to avoid blocking commits.
+if command -v pwsh >/dev/null 2>&1; then
+  pwsh -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT/scripts/post_fix_commit.ps1" -Message "chore(agent): auto commit after automated fix (pre-commit hook)" || true
+elif command -v powershell >/dev/null 2>&1; then
+  powershell -NoProfile -ExecutionPolicy Bypass -File "$REPO_ROOT\scripts\post_fix_commit.ps1" -Message "chore(agent): auto commit after automated fix (pre-commit hook)" || true
+fi
+
+# Don't block the user's commit
+exit 0

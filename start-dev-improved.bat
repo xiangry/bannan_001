@@ -1,11 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
 
-rem Ensure console uses UTF-8 to avoid Chinese garbled output
-chcp 65001 > nul
-rem Prefer .NET CLI messages in Simplified Chinese (optional)
-set "DOTNET_CLI_UI_LANGUAGE=zh-CN"
-
 echo ========================================
 echo 数学漫画生成器 - 开发环境启动脚本
 echo ========================================
@@ -107,14 +102,14 @@ echo ========================================
 
 echo.
 echo 启动 API 服务器 (https://localhost:7109)...
-start "Math Comic Generator API" cmd /k "title Math Comic Generator API && cd /d "%~dp0" && chcp 65001 > nul && echo 启动 API 服务器... && dotnet run --project MathComicGenerator.Api --urls https://localhost:7109"
+start "Math Comic Generator API" cmd /k "title Math Comic Generator API && cd /d "%~dp0" && echo 启动 API 服务器... && dotnet run --project MathComicGenerator.Api --urls https://localhost:7109"
 
 echo 等待 API 服务器启动...
 timeout /t 10 /nobreak > nul
 
 echo.
 echo 启动 Web 服务器 (https://localhost:5001)...
-start "Math Comic Generator Web" cmd /k "title Math Comic Generator Web && cd /d "%~dp0" && chcp 65001 > nul && echo 启动 Web 服务器... && dotnet run --project MathComicGenerator.Web --urls https://localhost:5001"
+start "Math Comic Generator Web" cmd /k "title Math Comic Generator Web && cd /d "%~dp0" && echo 启动 Web 服务器... && dotnet run --project MathComicGenerator.Web --urls https://localhost:5001"
 
 echo.
 echo ========================================
