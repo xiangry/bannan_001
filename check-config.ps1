@@ -70,3 +70,4 @@ Write-Host "3. 访问应用: https://localhost:5001" -ForegroundColor White
 Write-Host "4. 检查配置状态: https://localhost:7109/api/comic/config-status" -ForegroundColor White
 
 Write-Host "`n=== 配置检查完成 ===" -ForegroundColor Green
+# agent-run-test: ensure hooks work 2025-12-18T16:20:17.1227372+08:00
