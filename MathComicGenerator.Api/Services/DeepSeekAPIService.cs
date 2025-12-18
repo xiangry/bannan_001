@@ -78,6 +78,11 @@ public class DeepSeekAPIService : IDeepSeekAPIService
             Console.WriteLine($"Request Body: {requestJson}");
             Console.WriteLine("============================");
             
+            // 写入文件以便检查
+            var debugFile = Path.Combine(Directory.GetCurrentDirectory(), "logs", "deepseek-debug.json");
+            Directory.CreateDirectory(Path.GetDirectoryName(debugFile)!);
+            await File.WriteAllTextAsync(debugFile, requestJson);
+            
             var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
             var response = await _retryPolicy.ExecuteAsync(async () =>
@@ -384,7 +389,7 @@ public class DeepSeekAPIService : IDeepSeekAPIService
     {
         return new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            PropertyNamingPolicy = null, // 使用JsonPropertyName属性指定的名称
             PropertyNameCaseInsensitive = true,
             WriteIndented = true,
             Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping

@@ -43,14 +43,16 @@ public class ResourceManagementService
 
         try
         {
-            var acquired = await _requestSemaphore.WaitAsync(_config.RequestTimeoutMs, cancellationToken);
+            // 使用更短的超时时间，避免长时间等待
+            var acquired = await _requestSemaphore.WaitAsync(1000, cancellationToken); // 1秒超时
             
             if (!acquired)
             {
-                _logger.LogWarning("Failed to acquire resource within timeout");
+                _logger.LogWarning("Failed to acquire resource within timeout (1s). Available slots: {AvailableSlots}", _requestSemaphore.CurrentCount);
                 throw new ResourceLimitException("系统繁忙，请稍后重试");
             }
 
+            _logger.LogDebug("Resource acquired successfully. Remaining slots: {RemainingSlots}", _requestSemaphore.CurrentCount);
             return true;
         }
         catch (OperationCanceledException)

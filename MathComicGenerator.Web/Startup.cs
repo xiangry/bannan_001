@@ -11,6 +11,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using MathComicGenerator.Web.Data;
+using MathComicGenerator.Web.Services;
+using MathComicGenerator.Shared.Interfaces;
 
 namespace MathComicGenerator.Web
 {
@@ -46,6 +48,10 @@ namespace MathComicGenerator.Web
             
             // 注册默认HttpClient
             services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().CreateClient("API"));
+            
+            // 注册性能优化服务
+            services.AddSingleton<IAsyncLoggingService, AsyncLoggingService>();
+            services.AddSingleton<IUIPerformanceService, UIPerformanceService>();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.

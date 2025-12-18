@@ -30,6 +30,9 @@ public class PromptGenerationService : IPromptGenerationService
             var systemPrompt = BuildSystemPrompt(options);
             var userPrompt = BuildUserPrompt(mathConcept, options);
 
+            _logger.LogInformation("Calling DeepSeek API service with systemPrompt length: {SystemLength}, userPrompt length: {UserLength}", 
+                systemPrompt.Length, userPrompt.Length);
+
             var response = await _deepSeekService.GeneratePromptAsync(systemPrompt, userPrompt);
 
             var generatedPrompt = ExtractPromptFromResponse(response);

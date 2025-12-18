@@ -1,7 +1,7 @@
 @using MathComicGenerator.Shared.Models
 @using MathComicGenerator.Shared.Services
 @using System.ComponentModel.DataAnnotations
-@inject IJSRuntime JSRuntime
+@inherits OptimizedComponentBase
 
 <div class="math-input-container">
     <div class="card">
@@ -17,9 +17,6 @@
                 <div class="form-group">
                     <label for="mathConcept" class="form-label">知识点内容</label>
                     <InputTextArea @bind-Value="inputModel.MathConcept" 
-                                   @oninput="HandleMathConceptInput"
-                                   @onfocus="HandleMathConceptFocus"
-                                   @onblur="HandleMathConceptBlur"
                                    class="@GetInputCssClass()"
                                    id="mathConcept"
                                    placeholder="请输入任意知识点，例如：加法运算、几何图形、分数概念、历史事件、科学原理等..."
@@ -38,7 +35,6 @@
                         <div class="form-group">
                             <label for="ageGroup" class="form-label">目标年龄组</label>
                             <InputSelect @bind-Value="inputModel.Options.AgeGroup" 
-                                       @onchange="HandleAgeGroupChange"
                                        class="form-select" id="ageGroup">
                                 <option value="@AgeGroup.Preschool">学龄前 (5-6岁)</option>
                                 <option value="@AgeGroup.Elementary">小学及以上 (6岁以上)</option>
@@ -50,7 +46,6 @@
                         <div class="form-group">
                             <label for="panelCount" class="form-label">面板数量</label>
                             <InputNumber @bind-Value="inputModel.Options.PanelCount" 
-                                       @onchange="HandlePanelCountChange"
                                        class="form-control" 
                                        id="panelCount"
                                        min="3" 
@@ -65,7 +60,6 @@
                         <div class="form-group">
                             <label for="visualStyle" class="form-label">视觉风格</label>
                             <InputSelect @bind-Value="inputModel.Options.VisualStyle" 
-                                       @onchange="HandleVisualStyleChange"
                                        class="form-select" id="visualStyle">
                                 <option value="@VisualStyle.Cartoon">卡通风格</option>
                                 <option value="@VisualStyle.Colorful">多彩风格</option>
@@ -79,7 +73,6 @@
                         <div class="form-group">
                             <label for="language" class="form-label">语言</label>
                             <InputSelect @bind-Value="inputModel.Options.Language" 
-                                       @onchange="HandleLanguageChange"
                                        class="form-select" id="language">
                                 <option value="@Language.Chinese">中文</option>
                                 <option value="@Language.English">English</option>
@@ -93,7 +86,6 @@
                         <div class="form-group">
                             <div class="form-check">
                                 <InputCheckbox @bind-Value="inputModel.Options.EnablePinyin" 
-                                             @onchange="HandlePinyinToggle"
                                              class="form-check-input" id="enablePinyin" />
                                 <label class="form-check-label" for="enablePinyin">
                                     为漫画文字添加拼音
@@ -118,7 +110,7 @@
                 }
 
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary" disabled="@isGenerating" @onclick="HandleSubmitClick">
+                    <button type="submit" class="btn btn-primary" disabled="@isGenerating">
                         @if (isGenerating)
                         {
                             <span class="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -152,35 +144,24 @@
     private List<string> suggestions = new();
     private bool isGenerating;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
+        await base.OnInitializedAsync();
+        
         // 设置默认值
         inputModel.Options = new GenerationOptions
         {
-            AgeGroup = AgeGroup.Preschool, // 默认5-6岁
+            AgeGroup = AgeGroup.Preschool,
             PanelCount = 4,
             VisualStyle = VisualStyle.Cartoon,
             Language = Language.Chinese,
-            EnablePinyin = true // 默认开启拼音
+            EnablePinyin = true
         };
 
-        // Log component initialization
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("logInfo", "MathInputComponent initialized", new {
-                    defaultAgeGroup = inputModel.Options.AgeGroup.ToString(),
-                    defaultPanelCount = inputModel.Options.PanelCount,
-                    defaultVisualStyle = inputModel.Options.VisualStyle.ToString(),
-                    defaultLanguage = inputModel.Options.Language.ToString(),
-                    defaultEnablePinyin = inputModel.Options.EnablePinyin
-                }, "COMPONENT_INIT");
-            }
-            catch (InvalidOperationException)
-            {
-                // Ignore JS interop errors during prerendering
-            }
+        // 非阻塞的初始化日志
+        _ = LogUserActionAsync("ComponentInitialized", new {
+            defaultAgeGroup = inputModel.Options.AgeGroup.ToString(),
+            defaultPanelCount = inputModel.Options.PanelCount
         });
     }
 
@@ -191,163 +172,82 @@
 
     private async Task HandleSubmit()
     {
-        try
+        await ExecuteWithPerformanceTrackingAsync("FormSubmit", async () =>
         {
-            // Log form submission attempt
-            await JSRuntime.InvokeVoidAsync("logUserInput", "form_submit", inputModel.MathConcept, null);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Form submission started", new {
-                mathConcept = inputModel.MathConcept,
-                conceptLength = inputModel.MathConcept?.Length ?? 0,
-                ageGroup = inputModel.Options.AgeGroup.ToString(),
-                panelCount = inputModel.Options.PanelCount,
-                visualStyle = inputModel.Options.VisualStyle.ToString(),
-                language = inputModel.Options.Language.ToString(),
-                enablePinyin = inputModel.Options.EnablePinyin
-            }, "FORM_SUBMIT");
-
-            validationMessage = string.Empty;
-            suggestions.Clear();
-
-            // 基本验证：确保输入不为空
-            if (string.IsNullOrWhiteSpace(inputModel.MathConcept))
+            try
             {
-                validationMessage = "Please enter knowledge content";
-                await JSRuntime.InvokeVoidAsync("logValidation", "MathInputForm", "MathConcept", false, "Empty input");
-                StateHasChanged();
-                return;
-            }
+                // 非阻塞的表单提交日志
+                _ = LogUserActionAsync("FormSubmit", new {
+                    mathConcept = inputModel.MathConcept,
+                    conceptLength = inputModel.MathConcept?.Length ?? 0
+                });
 
-            if (inputModel.MathConcept.Length > 200)
-            {
-                validationMessage = "Knowledge content cannot exceed 200 characters";
-                await JSRuntime.InvokeVoidAsync("logValidation", "MathInputForm", "MathConcept", false, "Input too long");
-                StateHasChanged();
-                return;
-            }
+                validationMessage = string.Empty;
+                suggestions.Clear();
 
-            // Log successful validation
-            await JSRuntime.InvokeVoidAsync("logValidation", "MathInputForm", "MathConcept", true, null);
-
-            // 创建简单的数学概念对象，直接使用用户输入
-            var mathConcept = new MathConcept
-            {
-                Topic = inputModel.MathConcept.Trim(),
-                AgeGroup = inputModel.Options.AgeGroup,
-                Difficulty = DifficultyLevel.Elementary, // 默认初级难度
-                Keywords = new List<string>()
-            };
-
-            // 创建生成请求
-            var request = new ComicGenerationRequest
-            {
-                MathConcept = mathConcept,
-                Options = inputModel.Options
-            };
-
-            // Log request creation
-            await JSRuntime.InvokeVoidAsync("logInfo", "Comic generation request created", new {
-                topic = mathConcept.Topic,
-                ageGroup = mathConcept.AgeGroup.ToString(),
-                difficulty = mathConcept.Difficulty.ToString(),
-                options = new {
-                    ageGroup = request.Options.AgeGroup.ToString(),
-                    panelCount = request.Options.PanelCount,
-                    visualStyle = request.Options.VisualStyle.ToString(),
-                    language = request.Options.Language.ToString(),
-                    enablePinyin = request.Options.EnablePinyin
+                // 基本验证
+                if (string.IsNullOrWhiteSpace(inputModel.MathConcept))
+                {
+                    validationMessage = "请输入知识点内容";
+                    SafeStateHasChanged();
+                    return;
                 }
-            }, "REQUEST_CREATION");
 
-            // 触发提交事件
-            await OnSubmit.InvokeAsync(request);
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error in form submission", ex.Message, "FORM_SUBMIT");
-            validationMessage = $"Submission error: {ex.Message}";
-            StateHasChanged();
-        }
-    }
+                if (inputModel.MathConcept.Length > 200)
+                {
+                    validationMessage = "知识点内容不能超过200个字符";
+                    SafeStateHasChanged();
+                    return;
+                }
 
-    private async Task HandleSubmitClick()
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("logUserClick", new {
-                button = "submit",
-                action = "generate_prompt",
-                disabled = isGenerating,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, null);
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging submit click", ex.Message, "CLICK_ERROR");
-        }
+                // 创建数学概念对象
+                var mathConcept = new MathConcept
+                {
+                    Topic = inputModel.MathConcept.Trim(),
+                    AgeGroup = inputModel.Options.AgeGroup,
+                    Difficulty = DifficultyLevel.Elementary,
+                    Keywords = new List<string>()
+                };
+
+                // 创建生成请求
+                var request = new ComicGenerationRequest
+                {
+                    MathConcept = mathConcept,
+                    Options = inputModel.Options
+                };
+
+                // 触发提交事件
+                await OnSubmit.InvokeAsync(request);
+            }
+            catch (Exception ex)
+            {
+                await LogErrorAsync("Error in form submission", ex);
+                validationMessage = $"提交错误: {ex.Message}";
+                SafeStateHasChanged();
+            }
+        });
     }
 
     private async Task HandleResetClick()
     {
-        try
+        await ExecuteWithPerformanceTrackingAsync("FormReset", async () =>
         {
-            await JSRuntime.InvokeVoidAsync("logUserClick", new {
-                button = "reset",
-                action = "reset_form",
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, null);
+            _ = LogUserActionAsync("FormReset");
             
-            await ResetForm();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging reset click", ex.Message, "CLICK_ERROR");
-        }
-    }
-
-    private async Task ResetForm()
-    {
-        try
-        {
-            var oldModel = new {
-                mathConcept = inputModel.MathConcept,
-                ageGroup = inputModel.Options.AgeGroup.ToString(),
-                panelCount = inputModel.Options.PanelCount,
-                visualStyle = inputModel.Options.VisualStyle.ToString(),
-                language = inputModel.Options.Language.ToString(),
-                enablePinyin = inputModel.Options.EnablePinyin
-            };
-
             inputModel = new MathInputModel();
             inputModel.Options = new GenerationOptions
             {
-                AgeGroup = AgeGroup.Preschool, // 默认5-6岁
+                AgeGroup = AgeGroup.Preschool,
                 PanelCount = 4,
                 VisualStyle = VisualStyle.Cartoon,
                 Language = Language.Chinese,
-                EnablePinyin = true // 默认开启拼音
+                EnablePinyin = true
             };
             validationMessage = string.Empty;
             suggestions.Clear();
 
-            await JSRuntime.InvokeVoidAsync("logInfo", "Form reset completed", new {
-                oldModel,
-                newModel = new {
-                    mathConcept = inputModel.MathConcept,
-                    ageGroup = inputModel.Options.AgeGroup.ToString(),
-                    panelCount = inputModel.Options.PanelCount,
-                    visualStyle = inputModel.Options.VisualStyle.ToString(),
-                    language = inputModel.Options.Language.ToString(),
-                    enablePinyin = inputModel.Options.EnablePinyin
-                },
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "FORM_RESET");
-
-            StateHasChanged();
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error during form reset", ex.Message, "RESET_ERROR");
-        }
+            SafeStateHasChanged();
+        });
     }
 
     private bool HasValidationError(string fieldName)
@@ -358,164 +258,6 @@
     private string GetInputCssClass()
     {
         return HasValidationError("MathConcept") ? "form-control is-invalid" : "form-control";
-    }
-
-    // Event handlers for console debugging
-    private async Task HandleMathConceptInput(ChangeEventArgs e)
-    {
-        try
-        {
-            var value = e.Value?.ToString() ?? "";
-            await JSRuntime.InvokeVoidAsync("logUserInput", "math_concept_input", value, null);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Math concept input changed", new {
-                length = value.Length,
-                isEmpty = string.IsNullOrWhiteSpace(value),
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_INPUT");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging math concept input", ex.Message, "INPUT_ERROR");
-        }
-    }
-
-    private async Task HandleMathConceptFocus(FocusEventArgs e)
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("logInfo", "Math concept input focused", new {
-                currentValue = inputModel.MathConcept,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_FOCUS");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging focus event", ex.Message, "FOCUS_ERROR");
-        }
-    }
-
-    private async Task HandleMathConceptBlur(FocusEventArgs e)
-    {
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("logInfo", "Math concept input blurred", new {
-                finalValue = inputModel.MathConcept,
-                length = inputModel.MathConcept?.Length ?? 0,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_BLUR");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging blur event", ex.Message, "BLUR_ERROR");
-        }
-    }
-
-    private async Task HandleAgeGroupChange(ChangeEventArgs e)
-    {
-        try
-        {
-            var oldValue = inputModel.Options.AgeGroup.ToString();
-            var newValue = e.Value?.ToString() ?? "";
-            
-            await JSRuntime.InvokeVoidAsync("logUserSelection", "age_group", newValue, new[] { "Preschool", "Elementary" });
-            await JSRuntime.InvokeVoidAsync("logStateChange", "MathInputComponent", oldValue, newValue);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Age group selection changed", new {
-                oldValue,
-                newValue,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_SELECTION");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging age group change", ex.Message, "SELECTION_ERROR");
-        }
-    }
-
-    private async Task HandlePanelCountChange(ChangeEventArgs e)
-    {
-        try
-        {
-            var oldValue = inputModel.Options.PanelCount;
-            var newValue = int.TryParse(e.Value?.ToString(), out var parsed) ? parsed : oldValue;
-            
-            await JSRuntime.InvokeVoidAsync("logUserInput", "panel_count", newValue.ToString(), null);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Panel count changed", new {
-                oldValue,
-                newValue,
-                isValid = newValue >= 3 && newValue <= 6,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_INPUT");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging panel count change", ex.Message, "INPUT_ERROR");
-        }
-    }
-
-    private async Task HandleVisualStyleChange(ChangeEventArgs e)
-    {
-        try
-        {
-            var oldValue = inputModel.Options.VisualStyle.ToString();
-            var newValue = e.Value?.ToString() ?? "";
-            
-            await JSRuntime.InvokeVoidAsync("logUserSelection", "visual_style", newValue, 
-                new[] { "Cartoon", "Colorful", "Realistic", "Minimalist" });
-            await JSRuntime.InvokeVoidAsync("logStateChange", "MathInputComponent", oldValue, newValue);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Visual style selection changed", new {
-                oldValue,
-                newValue,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_SELECTION");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging visual style change", ex.Message, "SELECTION_ERROR");
-        }
-    }
-
-    private async Task HandleLanguageChange(ChangeEventArgs e)
-    {
-        try
-        {
-            var oldValue = inputModel.Options.Language.ToString();
-            var newValue = e.Value?.ToString() ?? "";
-            
-            await JSRuntime.InvokeVoidAsync("logUserSelection", "language", newValue, 
-                new[] { "Chinese", "English" });
-            await JSRuntime.InvokeVoidAsync("logStateChange", "MathInputComponent", oldValue, newValue);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Language selection changed", new {
-                oldValue,
-                newValue,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_SELECTION");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging language change", ex.Message, "SELECTION_ERROR");
-        }
-    }
-
-    private async Task HandlePinyinToggle(ChangeEventArgs e)
-    {
-        try
-        {
-            var oldValue = inputModel.Options.EnablePinyin;
-            var newValue = bool.TryParse(e.Value?.ToString(), out var parsed) ? parsed : oldValue;
-            
-            await JSRuntime.InvokeVoidAsync("logUserSelection", "enable_pinyin", newValue.ToString(), 
-                new[] { "true", "false" });
-            await JSRuntime.InvokeVoidAsync("logStateChange", "MathInputComponent", oldValue.ToString(), newValue.ToString());
-            await JSRuntime.InvokeVoidAsync("logInfo", "Pinyin option toggled", new {
-                oldValue,
-                newValue,
-                timestamp = DateTime.Now.ToString("HH:mm:ss")
-            }, "USER_SELECTION");
-        }
-        catch (Exception ex)
-        {
-            await JSRuntime.InvokeVoidAsync("logError", "Error logging pinyin toggle", ex.Message, "SELECTION_ERROR");
-        }
     }
 
     public class MathInputModel

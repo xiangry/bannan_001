@@ -5,11 +5,11 @@ Write-Host "=" * 50
 
 # 检查服务状态
 Write-Host "`n🔍 检查服务状态..."
-$apiUrl = "https://localhost:7109"
-$webUrl = "https://localhost:5001"
+$apiUrl = "http://localhost:5082"
+$webUrl = "http://localhost:5001"
 
 try {
-    $apiResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/config-status" -Method GET -SkipCertificateCheck
+    $apiResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/config-status" -Method GET
     Write-Host "✅ API服务正常运行 ($apiUrl)" -ForegroundColor Green
 } catch {
     Write-Host "❌ API服务未运行，请先启动API服务" -ForegroundColor Red
@@ -18,7 +18,7 @@ try {
 }
 
 try {
-    $webResponse = Invoke-WebRequest -Uri $webUrl -Method GET -SkipCertificateCheck
+    $webResponse = Invoke-WebRequest -Uri $webUrl -Method GET
     if ($webResponse.StatusCode -eq 200) {
         Write-Host "✅ Web服务正常运行 ($webUrl)" -ForegroundColor Green
     }
@@ -74,7 +74,7 @@ foreach ($testCase in $testCases) {
     }
 
     try {
-        $response = Invoke-RestMethod -Uri "$apiUrl/api/comic/generate-prompt" -Method POST -Body ($requestData | ConvertTo-Json) -ContentType "application/json" -SkipCertificateCheck
+        $response = Invoke-RestMethod -Uri "$apiUrl/api/comic/generate-prompt" -Method POST -Body ($requestData | ConvertTo-Json) -ContentType "application/json"
         
         if ($response.success -and $response.data) {
             $promptData = $response.data
@@ -99,7 +99,7 @@ foreach ($testCase in $testCases) {
             $validateRequest = @{ Prompt = $promptData.generatedPrompt }
             
             try {
-                $validateResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/validate-prompt" -Method POST -Body ($validateRequest | ConvertTo-Json) -ContentType "application/json" -SkipCertificateCheck
+                $validateResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/validate-prompt" -Method POST -Body ($validateRequest | ConvertTo-Json) -ContentType "application/json"
                 
                 if ($validateResponse.success -and $validateResponse.data.isValid) {
                     Write-Host "   ✅ 提示词验证通过" -ForegroundColor Green
@@ -121,7 +121,7 @@ foreach ($testCase in $testCases) {
             }
 
             try {
-                $comicResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/generate-from-prompt" -Method POST -Body ($comicRequest | ConvertTo-Json) -ContentType "application/json" -SkipCertificateCheck
+                $comicResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/generate-from-prompt" -Method POST -Body ($comicRequest | ConvertTo-Json) -ContentType "application/json"
                 
                 if ($comicResponse.success -and $comicResponse.data) {
                     $comicData = $comicResponse.data

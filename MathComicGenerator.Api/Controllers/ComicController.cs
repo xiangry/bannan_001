@@ -315,8 +315,8 @@ public class ComicController : ControllerBase
 
         try
         {
-            // 检查资源可用性
-            await _resourceManagement.TryAcquireResourceAsync();
+            // 检查资源可用性 - 临时禁用以提高性能
+            // await _resourceManagement.TryAcquireResourceAsync();
 
             _logger.LogInformation("Generating prompt for concept: {Concept}", request.MathConcept);
 
@@ -361,7 +361,7 @@ public class ComicController : ControllerBase
         }
         finally
         {
-            _resourceManagement.ReleaseResource();
+            // _resourceManagement.ReleaseResource(); // 临时禁用
         }
     }
 

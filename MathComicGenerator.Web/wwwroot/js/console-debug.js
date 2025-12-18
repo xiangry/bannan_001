@@ -5,8 +5,8 @@
 
 class ConsoleDebugger {
     constructor() {
-        this.isEnabled = true;
-        this.logLevel = 'DEBUG'; // DEBUG, INFO, WARN, ERROR
+        this.isEnabled = false; // 禁用调试日志以提高性能
+        this.logLevel = 'ERROR'; // 只记录错误日志
         this.sessionId = this.generateSessionId();
         this.startTime = new Date();
         
@@ -58,161 +58,87 @@ class ConsoleDebugger {
 
     logDebug(message, data = null, category = 'DEBUG') {
         if (!this.isEnabled) return;
-        
-        const logEntry = this.formatMessage('DEBUG', category, message, data);
-        console.debug('🔍 [DEBUG]', logEntry.timestamp, `[${category}]`, message, data || '');
+        // 快速返回，避免不必要的处理
     }
 
     logInfo(message, data = null, category = 'INFO') {
         if (!this.isEnabled) return;
-        
-        const logEntry = this.formatMessage('INFO', category, message, data);
-        console.info('ℹ️ [INFO]', logEntry.timestamp, `[${category}]`, message, data || '');
+        // 快速返回，避免不必要的处理
     }
 
     logWarn(message, data = null, category = 'WARN') {
         if (!this.isEnabled) return;
-        
-        const logEntry = this.formatMessage('WARN', category, message, data);
-        console.warn('⚠️ [WARN]', logEntry.timestamp, `[${category}]`, message, data || '');
+        // 快速返回，避免不必要的处理
     }
 
     logError(message, error = null, category = 'ERROR') {
-        if (!this.isEnabled) return;
-        
-        const errorData = error ? {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        } : null;
-        
-        const logEntry = this.formatMessage('ERROR', category, message, errorData);
-        console.error('❌ [ERROR]', logEntry.timestamp, `[${category}]`, message, errorData || '');
+        // 只记录错误日志，用于调试重要问题
+        const timestamp = new Date().toISOString();
+        console.error('❌ [ERROR]', timestamp, `[${category}]`, message, error || '');
     }
 
-    // User Interaction Logging
+    // User Interaction Logging - 优化为快速返回
     logUserInput(inputType, value, element = null) {
-        this.logInfo(`User input detected: ${inputType}`, {
-            inputType,
-            value: typeof value === 'string' ? value.substring(0, 100) + (value.length > 100 ? '...' : '') : value,
-            elementId: element?.id,
-            elementClass: element?.className
-        }, 'USER_INPUT');
+        if (!this.isEnabled) return;
     }
 
     logUserClick(elementInfo, coordinates = null) {
-        this.logInfo('User click detected', {
-            element: elementInfo,
-            coordinates,
-            timestamp: new Date().toISOString()
-        }, 'USER_CLICK');
+        if (!this.isEnabled) return;
     }
 
     logUserSelection(selectionType, selectedValue, options = null) {
-        this.logInfo(`User selection: ${selectionType}`, {
-            selectionType,
-            selectedValue,
-            availableOptions: options
-        }, 'USER_SELECTION');
+        if (!this.isEnabled) return;
     }
 
-    // API Request/Response Logging
+    // API Request/Response Logging - 只记录错误
     logApiRequest(method, url, requestData = null, headers = null) {
-        this.logInfo(`API Request: ${method} ${url}`, {
-            method,
-            url,
-            requestData: requestData ? JSON.stringify(requestData).substring(0, 500) + '...' : null,
-            headers,
-            timestamp: new Date().toISOString()
-        }, 'API_REQUEST');
+        if (!this.isEnabled) return;
     }
 
     logApiResponse(method, url, status, responseData = null, duration = null) {
-        const isSuccess = status >= 200 && status < 300;
-        const logMethod = isSuccess ? this.logInfo.bind(this) : this.logError.bind(this);
-        
-        logMethod(`API Response: ${method} ${url} - ${status}`, {
-            method,
-            url,
-            status,
-            success: isSuccess,
-            responseSize: responseData ? JSON.stringify(responseData).length : 0,
-            duration: duration ? `${duration}ms` : null,
-            timestamp: new Date().toISOString()
-        }, 'API_RESPONSE');
+        // 只记录API错误响应
+        if (status >= 400) {
+            console.error('❌ API Error Response:', method, url, status, duration ? `${duration}ms` : '');
+        }
     }
 
     logApiError(method, url, error, requestData = null) {
-        this.logError(`API Error: ${method} ${url}`, {
-            method,
-            url,
-            error: error.message || error,
-            requestData: requestData ? JSON.stringify(requestData).substring(0, 200) + '...' : null,
-            timestamp: new Date().toISOString()
-        }, 'API_ERROR');
+        // 始终记录API错误
+        console.error('❌ API Error:', method, url, error.message || error);
     }
 
-    // Application State Logging
+    // Application State Logging - 禁用
     logStateChange(component, oldState, newState) {
-        this.logDebug(`State change in ${component}`, {
-            component,
-            oldState,
-            newState,
-            timestamp: new Date().toISOString()
-        }, 'STATE_CHANGE');
+        if (!this.isEnabled) return;
     }
 
     logComponentLifecycle(component, lifecycle, data = null) {
-        this.logDebug(`Component lifecycle: ${component} - ${lifecycle}`, {
-            component,
-            lifecycle,
-            data,
-            timestamp: new Date().toISOString()
-        }, 'COMPONENT');
+        if (!this.isEnabled) return;
     }
 
-    // Form Validation Logging
+    // Form Validation Logging - 只记录验证错误
     logValidation(formName, fieldName, isValid, errorMessage = null) {
-        const logMethod = isValid ? this.logDebug.bind(this) : this.logWarn.bind(this);
-        
-        logMethod(`Form validation: ${formName}.${fieldName}`, {
-            formName,
-            fieldName,
-            isValid,
-            errorMessage,
-            timestamp: new Date().toISOString()
-        }, 'VALIDATION');
+        if (!isValid && errorMessage) {
+            console.warn('⚠️ Validation Error:', formName, fieldName, errorMessage);
+        }
     }
 
-    // Performance Logging
+    // Performance Logging - 只记录慢操作
     logPerformance(operation, duration, details = null) {
-        const logMethod = duration > 1000 ? this.logWarn.bind(this) : this.logDebug.bind(this);
-        
-        logMethod(`Performance: ${operation} took ${duration}ms`, {
-            operation,
-            duration,
-            details,
-            timestamp: new Date().toISOString()
-        }, 'PERFORMANCE');
+        if (duration > 2000) { // 只记录超过2秒的操作
+            console.warn('⚠️ Slow Operation:', operation, `${duration}ms`, details);
+        }
     }
 
-    // Comic Generation Specific Logging
+    // Comic Generation Specific Logging - 只记录关键步骤
     logComicGeneration(step, status, data = null) {
-        this.logInfo(`Comic generation: ${step} - ${status}`, {
-            step,
-            status,
-            data,
-            timestamp: new Date().toISOString()
-        }, 'COMIC_GENERATION');
+        if (status === 'error' || status === 'failed') {
+            console.error('❌ Comic Generation Error:', step, status, data);
+        }
     }
 
     logPromptGeneration(mathConcept, options, result = null) {
-        this.logInfo('Prompt generation started', {
-            mathConcept,
-            options,
-            result,
-            timestamp: new Date().toISOString()
-        }, 'PROMPT_GENERATION');
+        if (!this.isEnabled) return;
     }
 
     // Utility Methods

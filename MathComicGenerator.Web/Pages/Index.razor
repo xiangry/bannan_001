@@ -2,8 +2,8 @@
 @using MathComicGenerator.Shared.Models
 @using MathComicGenerator.Web.Components
 @inject HttpClient Http
-@inject IJSRuntime JSRuntime
 @inject NavigationManager NavigationManager
+@inherits OptimizedComponentBase
 
 <PageTitle>数学漫画生成器</PageTitle>
 
@@ -101,222 +101,177 @@
         PromptEdit
     }
 
-    protected override Task OnInitializedAsync()
+    protected override async Task OnInitializedAsync()
     {
-        // Log component initialization
-        _ = Task.Run(async () =>
-        {
-            try
-            {
-                await JSRuntime.InvokeVoidAsync("logInfo", "Index component initializing", new { 
-                    component = "Index",
-                    step = currentStep.ToString(),
-                    timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                }, "COMPONENT_INIT");
-            }
-            catch (InvalidOperationException)
-            {
-                // Ignore JS interop errors during prerendering
-            }
-        });
+        await base.OnInitializedAsync();
         
-        return Task.CompletedTask;
+        // 非阻塞的组件初始化日志
+        _ = LogUserActionAsync("ComponentInitializing", new { 
+            step = currentStep.ToString(),
+            timestamp = DateTime.UtcNow
+        });
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await base.OnAfterRenderAsync(firstRender);
+        
         if (firstRender)
         {
             try
             {
-                await JSRuntime.InvokeVoidAsync("logInfo", "Index component first render completed", new { 
-                    component = "Index",
-                    firstRender = true,
-                    timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-                }, "COMPONENT_RENDER");
-                
                 await LoadComicHistory();
             }
             catch (Exception ex)
             {
-                await JSRuntime.InvokeVoidAsync("logError", "Error in OnAfterRenderAsync", ex.Message, "COMPONENT_ERROR");
+                await LogErrorAsync("Error in OnAfterRenderAsync", ex);
             }
         }
     }
 
     private async Task HandlePromptGeneration(MathInputComponent.ComicGenerationRequest request)
     {
-        var startTime = DateTime.Now;
-        
-        try
+        await ExecuteWithPerformanceTrackingAsync("PromptGeneration", async () =>
         {
-            // Log user action
-            await JSRuntime.InvokeVoidAsync("logUserInput", "prompt_generation_request", request.MathConcept.Topic, null);
-            await JSRuntime.InvokeVoidAsync("logInfo", "Starting prompt generation", new {
-                mathConcept = request.MathConcept.Topic,
-                ageGroup = request.Options.AgeGroup.ToString(),
-                panelCount = request.Options.PanelCount,
-                visualStyle = request.Options.VisualStyle.ToString(),
-                language = request.Options.Language.ToString(),
-                enablePinyin = request.Options.EnablePinyin
-            }, "PROMPT_GENERATION");
-
-            isGeneratingPrompt = true;
-            StateHasChanged();
-
-            await ShowNotification("Starting prompt generation...");
-
-            // 第一步：生成提示词
-            var requestData = new
+            try
             {
-                MathConcept = request.MathConcept.Topic,
-                Options = request.Options
-            };
+                // 非阻塞的用户操作日志
+                _ = LogUserActionAsync("PromptGenerationRequest", new {
+                    mathConcept = request.MathConcept.Topic,
+                    ageGroup = request.Options.AgeGroup.ToString(),
+                    panelCount = request.Options.PanelCount,
+                    visualStyle = request.Options.VisualStyle.ToString(),
+                    language = request.Options.Language.ToString(),
+                    enablePinyin = request.Options.EnablePinyin
+                });
 
-            // Log API request
-            await JSRuntime.InvokeVoidAsync("logApiRequest", "POST", "/api/comic/generate-prompt", requestData, null);
-            await ShowNotification($"Sending request: concept={request.MathConcept.Topic}");
+                isGeneratingPrompt = true;
+                SafeStateHasChanged();
 
-            var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", requestData);
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
+                await ShowNotificationAsync("正在生成提示词...");
 
-            await ShowNotification($"Received response: status={response.StatusCode}");
-
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                await ShowNotification($"Response content length: {responseContent.Length}");
-
-                // 解析包装的响应格式
-                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PromptGenerationResponse>>();
-                
-                // Log API response
-                await JSRuntime.InvokeVoidAsync("logApiResponse", "POST", "/api/comic/generate-prompt", 
-                    (int)response.StatusCode, wrappedResponse, duration);
-                
-                if (wrappedResponse?.Data != null)
+                // 第一步：生成提示词
+                var requestData = new
                 {
-                    currentPromptResponse = wrappedResponse.Data;
-                    currentStep = GenerationStep.PromptEdit;
+                    MathConcept = request.MathConcept.Topic,
+                    Options = request.Options
+                };
+
+                // 非阻塞的API请求日志
+                _ = LogApiRequestAsync("POST", "/api/comic/generate-prompt", requestData);
+
+                var response = await Http.PostAsJsonAsync("/api/comic/generate-prompt", requestData);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    // 解析包装的响应格式
+                    var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<PromptGenerationResponse>>();
                     
-                    // Log state change
-                    await JSRuntime.InvokeVoidAsync("logStateChange", "Index", "Input", "PromptEdit");
-                    await JSRuntime.InvokeVoidAsync("logInfo", "Prompt generation successful", new {
-                        promptId = currentPromptResponse.Id,
-                        duration = $"{duration}ms"
-                    }, "PROMPT_GENERATION");
+                    // 非阻塞的API响应日志
+                    _ = LogApiResponseAsync("POST", "/api/comic/generate-prompt", (int)response.StatusCode, wrappedResponse);
                     
-                    await ShowNotification($"Prompt generation successful! ID: {currentPromptResponse.Id}");
+                    if (wrappedResponse?.Data != null)
+                    {
+                        currentPromptResponse = wrappedResponse.Data;
+                        currentStep = GenerationStep.PromptEdit;
+                        
+                        // 非阻塞的状态变化日志
+                        _ = LogStateChangeAsync("Input", "PromptEdit", new { promptId = currentPromptResponse.Id });
+                        
+                        await ShowNotificationAsync($"提示词生成成功！ID: {currentPromptResponse.Id}");
+                    }
+                    else
+                    {
+                        await LogErrorAsync("Prompt response parsing failed", null, "Response data is null");
+                        await ShowNotificationAsync("提示词响应解析失败");
+                    }
                 }
                 else
                 {
-                    await JSRuntime.InvokeVoidAsync("logError", "Prompt response parsing failed", "Response data is null", "PROMPT_GENERATION");
-                    await ShowNotification("Prompt response parsing failed");
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    await LogErrorAsync($"Prompt generation failed: {response.StatusCode}", null, errorContent);
+                    await ShowNotificationAsync($"提示词生成失败: {response.StatusCode} - {errorContent}");
                 }
             }
-            else
+            catch (Exception ex)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                await JSRuntime.InvokeVoidAsync("logApiError", "POST", "/api/comic/generate-prompt", 
-                    $"HTTP {response.StatusCode}: {errorContent}", requestData);
-                await ShowNotification($"Prompt generation failed: {response.StatusCode} - {errorContent}");
+                await LogErrorAsync("Error during prompt generation", ex);
+                await ShowNotificationAsync($"生成提示词时发生错误: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logError", "Error during prompt generation", ex.Message, "PROMPT_GENERATION");
-            await JSRuntime.InvokeVoidAsync("logPerformance", "prompt_generation_error", duration, new { error = ex.Message });
-            await ShowNotification($"Error during prompt generation: {ex.Message}");
-        }
-        finally
-        {
-            isGeneratingPrompt = false;
-            StateHasChanged();
-            
-            var totalDuration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logPerformance", "prompt_generation_total", totalDuration, new { 
-                success = currentPromptResponse != null 
-            });
-        }
+            finally
+            {
+                isGeneratingPrompt = false;
+                SafeStateHasChanged();
+            }
+        });
     }
 
     private async Task HandleComicGeneration(ComicImageGenerationRequest request)
     {
-        var startTime = DateTime.Now;
-        
-        try
+        await ExecuteWithPerformanceTrackingAsync("ComicGeneration", async () =>
         {
-            // Log comic generation start
-            await JSRuntime.InvokeVoidAsync("logComicGeneration", "comic_generation", "started", new {
-                promptId = request.PromptId,
-                hasEditedPrompt = !string.IsNullOrEmpty(request.EditedPrompt)
-            });
-
-            isGeneratingComic = true;
-            StateHasChanged();
-
-            // Log API request
-            await JSRuntime.InvokeVoidAsync("logApiRequest", "POST", "/api/comic/generate-from-prompt", request, null);
-
-            // 第二步：根据提示词生成漫画
-            var response = await Http.PostAsJsonAsync("/api/comic/generate-from-prompt", request);
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
-
-            if (response.IsSuccessStatusCode)
+            try
             {
-                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<MultiPanelComic>>();
-                
-                // Log API response
-                await JSRuntime.InvokeVoidAsync("logApiResponse", "POST", "/api/comic/generate-from-prompt", 
-                    (int)response.StatusCode, wrappedResponse, duration);
-                
-                if (wrappedResponse?.Data != null)
+                // 非阻塞的漫画生成开始日志
+                _ = LogUserActionAsync("ComicGenerationStarted", new {
+                    promptId = request.PromptId,
+                    hasEditedPrompt = !string.IsNullOrEmpty(request.EditedPrompt)
+                });
+
+                isGeneratingComic = true;
+                SafeStateHasChanged();
+
+                // 非阻塞的API请求日志
+                _ = LogApiRequestAsync("POST", "/api/comic/generate-from-prompt", request);
+
+                // 第二步：根据提示词生成漫画
+                var response = await Http.PostAsJsonAsync("/api/comic/generate-from-prompt", request);
+
+                if (response.IsSuccessStatusCode)
                 {
-                    currentComic = wrappedResponse.Data;
+                    var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<MultiPanelComic>>();
                     
-                    // Log successful comic generation
-                    await JSRuntime.InvokeVoidAsync("logComicGeneration", "comic_generation", "completed", new {
-                        comicId = currentComic.Id,
-                        title = currentComic.Title,
-                        panelCount = currentComic.Panels.Count,
-                        duration = $"{duration}ms"
-                    });
+                    // 非阻塞的API响应日志
+                    _ = LogApiResponseAsync("POST", "/api/comic/generate-from-prompt", (int)response.StatusCode, wrappedResponse);
                     
-                    await ShowNotification("Comic generation successful!");
-                    await LoadComicHistory(); // 刷新历史记录
+                    if (wrappedResponse?.Data != null)
+                    {
+                        currentComic = wrappedResponse.Data;
+                        
+                        // 非阻塞的成功日志
+                        _ = LogUserActionAsync("ComicGenerationCompleted", new {
+                            comicId = currentComic.Id,
+                            title = currentComic.Title,
+                            panelCount = currentComic.Panels.Count
+                        });
+                        
+                        await ShowNotificationAsync("漫画生成成功！");
+                        await LoadComicHistory(); // 刷新历史记录
+                    }
+                    else
+                    {
+                        await LogErrorAsync("Comic response parsing failed", null, "Response data is null");
+                        await ShowNotificationAsync("漫画响应解析失败");
+                    }
                 }
                 else
                 {
-                    await JSRuntime.InvokeVoidAsync("logError", "Comic response parsing failed", "Response data is null", "COMIC_GENERATION");
-                    await ShowNotification("Comic response parsing failed");
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    await LogErrorAsync($"Comic generation failed: {response.StatusCode}", null, errorContent);
+                    await ShowNotificationAsync($"漫画生成失败: {errorContent}");
                 }
             }
-            else
+            catch (Exception ex)
             {
-                var errorContent = await response.Content.ReadAsStringAsync();
-                await JSRuntime.InvokeVoidAsync("logApiError", "POST", "/api/comic/generate-from-prompt", 
-                    $"HTTP {response.StatusCode}: {errorContent}", request);
-                await ShowNotification($"Comic generation failed: {errorContent}");
+                await LogErrorAsync("Error during comic generation", ex);
+                await ShowNotificationAsync($"生成漫画时发生错误: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logError", "Error during comic generation", ex.Message, "COMIC_GENERATION");
-            await JSRuntime.InvokeVoidAsync("logPerformance", "comic_generation_error", duration, new { error = ex.Message });
-            await ShowNotification($"Error during comic generation: {ex.Message}");
-        }
-        finally
-        {
-            isGeneratingComic = false;
-            StateHasChanged();
-            
-            var totalDuration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logPerformance", "comic_generation_total", totalDuration, new { 
-                success = currentComic != null 
-            });
-        }
+            finally
+            {
+                isGeneratingComic = false;
+                SafeStateHasChanged();
+            }
+        });
     }
 
     private async Task HandleGoBackToInput()
@@ -408,57 +363,43 @@
 
     private async Task LoadComicHistory()
     {
-        var startTime = DateTime.Now;
-        
-        try
+        await ExecuteWithPerformanceTrackingAsync("LoadComicHistory", async () =>
         {
-            await JSRuntime.InvokeVoidAsync("logInfo", "Loading comic history", null, "HISTORY_LOAD");
-            
-            isLoadingHistory = true;
-            StateHasChanged();
-
-            // Log API request
-            await JSRuntime.InvokeVoidAsync("logApiRequest", "GET", "/api/comic", null, null);
-
-            var response = await Http.GetAsync("/api/comic");
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
-            
-            if (response.IsSuccessStatusCode)
+            try
             {
-                var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<ComicMetadata>>>();
-                comicHistory = wrappedResponse?.Data ?? new();
+                isLoadingHistory = true;
+                SafeStateHasChanged();
+
+                // 非阻塞的API请求日志
+                _ = LogApiRequestAsync("GET", "/api/comic");
+
+                var response = await Http.GetAsync("/api/comic");
                 
-                // Log successful load
-                await JSRuntime.InvokeVoidAsync("logApiResponse", "GET", "/api/comic", 
-                    (int)response.StatusCode, wrappedResponse, duration);
-                await JSRuntime.InvokeVoidAsync("logInfo", "Comic history loaded successfully", new {
-                    count = comicHistory.Count,
-                    duration = $"{duration}ms"
-                }, "HISTORY_LOAD");
+                if (response.IsSuccessStatusCode)
+                {
+                    var wrappedResponse = await response.Content.ReadFromJsonAsync<ApiResponse<List<ComicMetadata>>>();
+                    comicHistory = wrappedResponse?.Data ?? new();
+                    
+                    // 非阻塞的成功日志
+                    _ = LogApiResponseAsync("GET", "/api/comic", (int)response.StatusCode, wrappedResponse);
+                    _ = LogUserActionAsync("ComicHistoryLoaded", new { count = comicHistory.Count });
+                }
+                else
+                {
+                    await LogErrorAsync($"Failed to load comic history: {response.StatusCode}");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                await JSRuntime.InvokeVoidAsync("logApiError", "GET", "/api/comic", 
-                    $"HTTP {response.StatusCode}", null);
+                await LogErrorAsync("Failed to load comic history", ex);
+                await ShowNotificationAsync($"加载历史记录失败: {ex.Message}");
             }
-        }
-        catch (Exception ex)
-        {
-            var duration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logError", "Failed to load comic history", ex.Message, "HISTORY_LOAD");
-            await JSRuntime.InvokeVoidAsync("logPerformance", "history_load_error", duration, new { error = ex.Message });
-            await ShowNotification($"Failed to load history: {ex.Message}");
-        }
-        finally
-        {
-            isLoadingHistory = false;
-            StateHasChanged();
-            
-            var totalDuration = (DateTime.Now - startTime).TotalMilliseconds;
-            await JSRuntime.InvokeVoidAsync("logPerformance", "history_load_total", totalDuration, new { 
-                success = comicHistory.Count > 0 
-            });
-        }
+            finally
+            {
+                isLoadingHistory = false;
+                SafeStateHasChanged();
+            }
+        });
     }
 
     private async Task HandleViewComic(ComicMetadata comic)
@@ -507,22 +448,13 @@
     private async Task ShowNotification(string message)
     {
         notificationMessage = message;
-        StateHasChanged();
+        SafeStateHasChanged();
         
-        // Log notification
-        try
-        {
-            await JSRuntime.InvokeVoidAsync("logInfo", "Showing notification", new { 
-                message = message,
-                timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss")
-            }, "NOTIFICATION");
-            
-            await JSRuntime.InvokeVoidAsync("showToast", "notificationToast");
-        }
-        catch (InvalidOperationException)
-        {
-            // 在预渲染阶段忽略JavaScript调用错误
-        }
+        // 非阻塞的通知日志
+        _ = LogUserActionAsync("ShowNotification", new { message });
+        
+        // 简化的通知显示，避免JavaScript调用
+        // 实际的Toast显示可以通过CSS动画或其他方式实现
     }
 }
 
