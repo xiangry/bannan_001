@@ -81,7 +81,8 @@ public class ErrorLoggingService
                     var json = await File.ReadAllTextAsync(file);
                     var error = JsonSerializer.Deserialize<ErrorLogEntry>(json, new JsonSerializerOptions
                     {
-                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
                     });
                     if (error != null)
                     {
@@ -178,7 +179,8 @@ public class ErrorLoggingService
             var json = JsonSerializer.Serialize(errorEntry, new JsonSerializerOptions
             {
                 WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             });
 
             await File.WriteAllTextAsync(filePath, json);

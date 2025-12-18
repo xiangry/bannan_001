@@ -2,6 +2,7 @@ using MathComicGenerator.Shared.Interfaces;
 using MathComicGenerator.Shared.Models;
 using Polly;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text;
 
 namespace MathComicGenerator.Api.Services;
@@ -66,6 +67,17 @@ public class DeepSeekAPIService : IDeepSeekAPIService
 
             var request = CreateDeepSeekRequest(systemPrompt, userPrompt);
             var requestJson = JsonSerializer.Serialize(request, GetJsonOptions());
+            
+            // 调试日志：记录发送给DeepSeek的请求
+            _logger.LogInformation("Sending request to DeepSeek API: {RequestJson}", requestJson);
+            
+            // 强制输出到控制台
+            Console.WriteLine("=== DeepSeek API Request ===");
+            Console.WriteLine($"URL: {_httpClient.BaseAddress}/chat/completions");
+            Console.WriteLine($"Headers: Authorization: Bearer {_config.ApiKey.Substring(0, 10)}...");
+            Console.WriteLine($"Request Body: {requestJson}");
+            Console.WriteLine("============================");
+            
             var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
 
             var response = await _retryPolicy.ExecuteAsync(async () =>
@@ -78,6 +90,14 @@ public class DeepSeekAPIService : IDeepSeekAPIService
                 var errorContent = await response.Content.ReadAsStringAsync();
                 _logger.LogError("DeepSeek API error: {StatusCode} - {Content}", 
                     response.StatusCode, errorContent);
+                _logger.LogError("Request that failed: {RequestJson}", requestJson);
+                
+                // 强制输出错误到控制台
+                Console.WriteLine("=== DeepSeek API Error ===");
+                Console.WriteLine($"Status Code: {response.StatusCode}");
+                Console.WriteLine($"Error Content: {errorContent}");
+                Console.WriteLine($"Failed Request: {requestJson}");
+                Console.WriteLine("==========================");
                 
                 // 如果是认证错误，回退到模拟数据
                 if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
@@ -364,9 +384,10 @@ public class DeepSeekAPIService : IDeepSeekAPIService
     {
         return new JsonSerializerOptions
         {
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             PropertyNameCaseInsensitive = true,
-            WriteIndented = true
+            WriteIndented = true,
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         };
     }
 }
@@ -389,43 +410,82 @@ public class DeepSeekAPIConfiguration
 // DeepSeek API 请求/响应模型
 public class DeepSeekRequest
 {
+    [JsonPropertyName("model")]
     public string Model { get; set; } = "";
+    
+    [JsonPropertyName("messages")]
     public DeepSeekMessage[] Messages { get; set; } = Array.Empty<DeepSeekMessage>();
+    
+    [JsonPropertyName("temperature")]
     public float Temperature { get; set; }
+    
+    [JsonPropertyName("max_tokens")]
     public int MaxTokens { get; set; }
+    
+    [JsonPropertyName("top_p")]
     public float TopP { get; set; }
+    
+    [JsonPropertyName("frequency_penalty")]
     public float FrequencyPenalty { get; set; }
+    
+    [JsonPropertyName("presence_penalty")]
     public float PresencePenalty { get; set; }
+    
+    [JsonPropertyName("stream")]
     public bool Stream { get; set; }
 }
 
 public class DeepSeekMessage
 {
+    [JsonPropertyName("role")]
     public string Role { get; set; } = "";
+    
+    [JsonPropertyName("content")]
     public string Content { get; set; } = "";
 }
 
 public class DeepSeekResponse
 {
+    [JsonPropertyName("id")]
     public string Id { get; set; } = "";
+    
+    [JsonPropertyName("object")]
     public string Object { get; set; } = "";
+    
+    [JsonPropertyName("created")]
     public long Created { get; set; }
+    
+    [JsonPropertyName("model")]
     public string Model { get; set; } = "";
+    
+    [JsonPropertyName("choices")]
     public DeepSeekChoice[] Choices { get; set; } = Array.Empty<DeepSeekChoice>();
+    
+    [JsonPropertyName("usage")]
     public DeepSeekUsage Usage { get; set; } = new();
 }
 
 public class DeepSeekChoice
 {
+    [JsonPropertyName("index")]
     public int Index { get; set; }
+    
+    [JsonPropertyName("message")]
     public DeepSeekMessage Message { get; set; } = new();
+    
+    [JsonPropertyName("finish_reason")]
     public string FinishReason { get; set; } = "";
 }
 
 public class DeepSeekUsage
 {
+    [JsonPropertyName("prompt_tokens")]
     public int PromptTokens { get; set; }
+    
+    [JsonPropertyName("completion_tokens")]
     public int CompletionTokens { get; set; }
+    
+    [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
 }
 
