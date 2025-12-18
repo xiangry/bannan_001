@@ -2,6 +2,23 @@
 echo 启动数学漫画生成器开发环境...
 
 echo.
+echo 正在关闭现有服务...
+echo 关闭所有 MathComicGenerator 相关进程...
+taskkill /f /im "MathComicGenerator.Api.exe" 2>nul
+taskkill /f /im "MathComicGenerator.Web.exe" 2>nul
+
+echo 关闭可能占用端口的 dotnet 进程...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":7109 "') do taskkill /f /pid %%a 2>nul
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr ":5001 "') do taskkill /f /pid %%a 2>nul
+
+echo 等待进程完全关闭...
+timeout /t 2 /nobreak > nul
+
+echo.
+echo 清理构建缓存...
+dotnet clean > nul
+
+echo.
 echo 检查配置...
 powershell -ExecutionPolicy Bypass -File check-config.ps1
 
@@ -33,4 +50,4 @@ echo API: https://localhost:7109
 echo Web: https://localhost:5001
 echo.
 echo 按任意键退出...
-pause > nul
+@REM pause > nul

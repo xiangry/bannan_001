@@ -108,25 +108,28 @@ public class DeepSeekAPIService : IDeepSeekAPIService
             // 重新抛出DeepSeek特定异常
             throw;
         }
-        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        catch (TaskCanceledException ex)
         {
-            _logger.LogError(ex, "DeepSeek API request timeout, falling back to mock data");
-            return GenerateIntelligentMockPrompt(userPrompt);
+            var timeoutMessage = $"DeepSeek API请求超时 (配置超时时间: {_config.TimeoutSeconds}秒)";
+            _logger.LogError(ex, "{TimeoutMessage}，异常详情: {ExceptionMessage}，回退到模拟数据", timeoutMessage, ex.Message);
+            throw new DeepSeekAPIException($"{timeoutMessage}: {ex.Message}", "TIMEOUT");
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "DeepSeek API network error, falling back to mock data");
-            return GenerateIntelligentMockPrompt(userPrompt);
+            var networkMessage = $"DeepSeek API网络错误，BaseUrl: {_config.BaseUrl}";
+            _logger.LogError(ex, "{NetworkMessage}，异常详情: {ExceptionMessage}，回退到模拟数据", networkMessage, ex.Message);
+            throw new DeepSeekAPIException($"{networkMessage}: {ex.Message}", "NETWORK_ERROR");
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse DeepSeek API response, falling back to mock data");
-            return GenerateIntelligentMockPrompt(userPrompt);
+            _logger.LogError(ex, "解析DeepSeek API响应失败，异常详情: {ExceptionMessage}，回退到模拟数据", ex.Message);
+            throw new DeepSeekAPIException($"响应解析错误: {ex.Message}", "PARSE_ERROR");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error with DeepSeek API, falling back to mock data");
-            return GenerateIntelligentMockPrompt(userPrompt);
+            _logger.LogError(ex, "DeepSeek API意外错误，异常类型: {ExceptionType}，异常详情: {ExceptionMessage}，回退到模拟数据", 
+                ex.GetType().Name, ex.Message);
+            throw new DeepSeekAPIException($"意外错误 ({ex.GetType().Name}): {ex.Message}", "UNEXPECTED_ERROR");
         }
     }
 

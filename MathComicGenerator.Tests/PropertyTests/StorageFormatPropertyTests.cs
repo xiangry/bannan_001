@@ -187,7 +187,7 @@ public class StorageFormatPropertyTests
     {
         if (!format.HasValue) return false;
         
-        var commonFormats = new[] { ImageFormat.PNG, ImageFormat.JPEG, ImageFormat.GIF, ImageFormat.WEBP };
+        var commonFormats = new[] { ImageFormat.PNG, ImageFormat.JPEG, ImageFormat.SVG };
         return commonFormats.Contains(format.Value);
     }
 

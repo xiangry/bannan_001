@@ -12,20 +12,22 @@ public class PanelCountPropertyTests
 {
     private readonly ComicGenerationService _comicService;
     private readonly Mock<IGeminiAPIService> _mockGeminiService;
+    private readonly Mock<IDeepSeekAPIService> _mockDeepSeekService;
     private readonly Mock<ILogger<ComicGenerationService>> _mockLogger;
 
     public PanelCountPropertyTests()
     {
         _mockGeminiService = new Mock<IGeminiAPIService>();
+        _mockDeepSeekService = new Mock<IDeepSeekAPIService>();
         _mockLogger = new Mock<ILogger<ComicGenerationService>>();
-        _comicService = new ComicGenerationService(_mockGeminiService.Object, _mockLogger.Object);
+        _comicService = new ComicGenerationService(_mockGeminiService.Object, _mockDeepSeekService.Object, _mockLogger.Object);
 
         // Setup mock to return valid comic content
         _mockGeminiService.Setup(x => x.GenerateComicContentAsync(It.IsAny<string>()))
-            .ReturnsAsync(new ComicContent 
+            .ReturnsAsync(new MathComicGenerator.Shared.Interfaces.ComicContent 
             { 
                 Title = "Mock Comic",
-                Panels = new List<PanelContent>()
+                Panels = new List<MathComicGenerator.Shared.Interfaces.PanelContent>()
             });
     }
 

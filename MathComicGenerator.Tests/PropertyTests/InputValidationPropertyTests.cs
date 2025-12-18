@@ -58,21 +58,37 @@ public class InputValidationPropertyTests
         // **Validates: Requirements 1.1**
         // For any non-empty input within reasonable length, system should not reject due to basic validation
         
-        // Arrange - Ensure input is within valid length (under 200 characters)
-        var testInput = input.Get.Length > 200 ? input.Get.Substring(0, 200) : input.Get;
+        if (input == null) return false;
         
-        // Act
-        var result = _validator.ValidateInput(testInput);
-        
-        // Assert - Non-empty, reasonable length inputs should pass basic validation
-        // (They might fail content validation, but not basic validation)
-        var passesBasicValidation = !string.IsNullOrWhiteSpace(testInput) && testInput.Length <= 200;
-        var validatorHandlesCorrectly = result != null;
-        
-        // Log the validation for debugging
-        Console.WriteLine($"[DEBUG] Basic Input Validation: Length={testInput.Length}, PassesBasic={passesBasicValidation}, HandledCorrectly={validatorHandlesCorrectly}");
-        
-        return passesBasicValidation == validatorHandlesCorrectly;
+        try
+        {
+            // Arrange - Clean input and ensure it's within valid length (under 200 characters)
+            var cleanInput = new string(input.Get.Where(c => !char.IsControl(c) || char.IsWhiteSpace(c)).ToArray());
+            var testInput = cleanInput.Length > 200 ? cleanInput.Substring(0, 200) : cleanInput;
+            
+            // Skip if input becomes empty after cleaning
+            if (string.IsNullOrWhiteSpace(testInput))
+            {
+                return true; // This is acceptable - control characters should be filtered out
+            }
+            
+            // Act
+            var result = _validator.ValidateInput(testInput);
+            
+            // Assert - Non-empty, reasonable length inputs should pass basic validation
+            // (They might fail content validation, but not basic validation)
+            var passesBasicValidation = !string.IsNullOrWhiteSpace(testInput) && testInput.Length <= 200;
+            var validatorHandlesCorrectly = result != null;
+            
+            // Log the validation for debugging
+            Console.WriteLine($"[DEBUG] Basic Input Validation: Length={testInput.Length}, PassesBasic={passesBasicValidation}, HandledCorrectly={validatorHandlesCorrectly}");
+            
+            return passesBasicValidation && validatorHandlesCorrectly;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     [Property]

@@ -34,7 +34,7 @@ namespace MathComicGenerator.Web
             // 添加HttpClient服务，配置API基地址
             services.AddHttpClient("API", client =>
             {
-                client.BaseAddress = new Uri("https://localhost:7109/");
+                client.BaseAddress = new Uri("http://localhost:5082/");
             })
             .ConfigurePrimaryHttpMessageHandler(() =>
             {

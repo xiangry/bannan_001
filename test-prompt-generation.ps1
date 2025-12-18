@@ -1,66 +1,52 @@
-#!/usr/bin/env pwsh
+# 测试提示词生成功能
+Write-Host "=== 测试提示词生成功能 ===" -ForegroundColor Green
 
-# Test script to reproduce the prompt generation issue
-
-$apiUrl = "https://localhost:7110"
-
-# Test data - using integer values for enums
-$testData = @{
-    MathConcept = "光的折射"
-    Options = @{
-        AgeGroup = 1        # Elementary = 1
-        VisualStyle = 0     # Cartoon = 0
-        PanelCount = 4
-        Language = 0        # Chinese = 0
-        EnablePinyin = $false
+# 测试数据
+$requestBody = @{
+    mathConcept = "加法"
+    options = @{
+        ageGroup = 1
+        panelCount = 4
+        visualStyle = 0
+        language = 0
+        enablePinyin = $false
     }
-}
+} | ConvertTo-Json -Depth 3
 
-$jsonBody = $testData | ConvertTo-Json -Depth 3
-Write-Host "Testing prompt generation with data:"
-Write-Host $jsonBody
+Write-Host "请求体:" -ForegroundColor Cyan
+Write-Host $requestBody -ForegroundColor Gray
+
+Write-Host "`n发送请求到提示词生成端点..." -ForegroundColor Yellow
 
 try {
-    # Test the generate-prompt endpoint
-    $response = Invoke-RestMethod -Uri "$apiUrl/api/comic/generate-prompt" -Method POST -Body $jsonBody -ContentType "application/json" -SkipCertificateCheck
-    Write-Host "SUCCESS: Prompt generation worked!"
-    Write-Host "Response: $($response | ConvertTo-Json -Depth 3)"
-}
-catch {
-    Write-Host "ERROR: Prompt generation failed!"
-    Write-Host "Status Code: $($_.Exception.Response.StatusCode)"
-    Write-Host "Error Message: $($_.Exception.Message)"
+    $response = Invoke-RestMethod -Uri "http://localhost:5082/api/comic/generate-prompt" -Method POST -Body $requestBody -ContentType "application/json" -TimeoutSec 60
     
-    # Get the response content using WebException
-    if ($_.Exception -is [System.Net.WebException]) {
-        $responseStream = $_.Exception.Response.GetResponseStream()
-        $reader = New-Object System.IO.StreamReader($responseStream)
-        $responseBody = $reader.ReadToEnd()
-        Write-Host "Response Body: $responseBody"
+    Write-Host "`n✅ 提示词生成成功!" -ForegroundColor Green
+    Write-Host "生成的提示词长度: $($response.generatedPrompt.Length)" -ForegroundColor Cyan
+    Write-Host "建议数量: $($response.suggestions.Count)" -ForegroundColor Cyan
+    
+    Write-Host "`n生成的提示词:" -ForegroundColor Cyan
+    Write-Host $response.generatedPrompt -ForegroundColor White
+    
+    Write-Host "`n改进建议:" -ForegroundColor Cyan
+    foreach ($suggestion in $response.suggestions) {
+        Write-Host "- $suggestion" -ForegroundColor Yellow
     }
-    elseif ($_.ErrorDetails) {
-        Write-Host "Error Details: $($_.ErrorDetails.Message)"
-    }
-}
-
-# Also test validation endpoint
-Write-Host "`n--- Testing validation endpoint ---"
-$validationData = @{
-    Concept = "光的折射"
-}
-
-$validationJson = $validationData | ConvertTo-Json
-Write-Host "Testing validation with: $validationJson"
-
-try {
-    $validationResponse = Invoke-RestMethod -Uri "$apiUrl/api/comic/validate" -Method POST -Body $validationJson -ContentType "application/json" -SkipCertificateCheck
-    Write-Host "Validation Response: $($validationResponse | ConvertTo-Json -Depth 3)"
-}
-catch {
-    Write-Host "Validation ERROR: $($_.Exception.Message)"
+    
+} catch {
+    Write-Host "`n❌ 提示词生成失败" -ForegroundColor Red
+    Write-Host "错误信息: $($_.Exception.Message)" -ForegroundColor Red
+    
     if ($_.Exception.Response) {
-        $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-        $responseBody = $reader.ReadToEnd()
-        Write-Host "Validation Response Body: $responseBody"
+        $statusCode = $_.Exception.Response.StatusCode
+        Write-Host "状态码: $statusCode" -ForegroundColor Red
+        
+        try {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $errorBody = $reader.ReadToEnd()
+            Write-Host "错误详情: $errorBody" -ForegroundColor Red
+        } catch {
+            Write-Host "无法读取错误详情" -ForegroundColor Red
+        }
     }
 }

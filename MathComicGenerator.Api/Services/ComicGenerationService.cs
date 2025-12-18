@@ -8,6 +8,7 @@ namespace MathComicGenerator.Api.Services;
 public class ComicGenerationService : IComicGenerationService
 {
     private readonly IGeminiAPIService _geminiAPIService;
+    private readonly IDeepSeekAPIService _deepSeekAPIService;
     private readonly MathConceptValidator _validator;
     private readonly MathContentDetector _contentDetector;
     private readonly ContentSafetyFilter _safetyFilter;
@@ -24,9 +25,11 @@ public class ComicGenerationService : IComicGenerationService
 
     public ComicGenerationService(
         IGeminiAPIService geminiAPIService,
+        IDeepSeekAPIService deepSeekAPIService,
         ILogger<ComicGenerationService> logger)
     {
         _geminiAPIService = geminiAPIService;
+        _deepSeekAPIService = deepSeekAPIService;
         _validator = new MathConceptValidator();
         _contentDetector = new MathContentDetector();
         _safetyFilter = new ContentSafetyFilter();
@@ -52,8 +55,8 @@ public class ComicGenerationService : IComicGenerationService
             // 3. 创建增强的提示词
             var enhancedPrompt = CreateEnhancedPrompt(concept, options);
 
-            // 4. 调用AI生成内容
-            var comicContent = await _geminiAPIService.GenerateComicContentAsync(enhancedPrompt);
+            // 4. 调用AI生成内容（使用备用API逻辑）
+            var comicContent = await GenerateContentWithFallbackAsync(enhancedPrompt);
 
             // 5. 内容安全过滤
             var filteredContent = ApplyContentSafetyFilter(comicContent);
@@ -89,8 +92,8 @@ public class ComicGenerationService : IComicGenerationService
             // 2. 增强用户提示词
             var enhancedPrompt = EnhanceUserPrompt(prompt, options);
 
-            // 3. 调用AI生成内容
-            var comicContent = await _geminiAPIService.GenerateComicContentAsync(enhancedPrompt);
+            // 3. 调用AI生成内容（使用备用API逻辑）
+            var comicContent = await GenerateContentWithFallbackAsync(enhancedPrompt);
 
             // 4. 内容安全过滤
             var filteredContent = ApplyContentSafetyFilter(comicContent);
@@ -526,6 +529,208 @@ public class ComicGenerationService : IComicGenerationService
         }
 
         return comic;
+    }
+
+    /// <summary>
+    /// 使用备用API逻辑生成内容，优先使用Gemini，失败时使用DeepSeek
+    /// </summary>
+    private async Task<ComicContent> GenerateContentWithFallbackAsync(string prompt)
+    {
+        var startTime = DateTime.UtcNow;
+        Exception? geminiException = null;
+        Exception? deepSeekException = null;
+
+        try
+        {
+            // 首先尝试使用Gemini API
+            _logger.LogInformation("尝试使用Gemini API生成内容，提示词长度: {PromptLength}", prompt.Length);
+            var geminiStartTime = DateTime.UtcNow;
+            
+            var result = await _geminiAPIService.GenerateComicContentAsync(prompt);
+            
+            var geminiDuration = DateTime.UtcNow - geminiStartTime;
+            _logger.LogInformation("Gemini API调用成功，耗时: {Duration}ms", geminiDuration.TotalMilliseconds);
+            
+            return result;
+        }
+        catch (Exception geminiEx)
+        {
+            geminiException = geminiEx;
+            var geminiDuration = DateTime.UtcNow - startTime;
+            _logger.LogWarning(geminiEx, "Gemini API调用失败，耗时: {Duration}ms，错误类型: {ExceptionType}，错误消息: {ErrorMessage}", 
+                geminiDuration.TotalMilliseconds, geminiEx.GetType().Name, geminiEx.Message);
+            
+            try
+            {
+                // 使用DeepSeek API作为备用
+                var deepSeekStartTime = DateTime.UtcNow;
+                _logger.LogInformation("尝试使用DeepSeek API作为备用");
+                
+                var systemPrompt = "你是一个专业的儿童教育漫画创作助手。请根据用户的提示词生成适合儿童的多格漫画内容。";
+                var deepSeekResponse = await _deepSeekAPIService.GeneratePromptAsync(systemPrompt, prompt);
+                
+                var deepSeekDuration = DateTime.UtcNow - deepSeekStartTime;
+                _logger.LogInformation("DeepSeek API调用成功，耗时: {Duration}ms", deepSeekDuration.TotalMilliseconds);
+                
+                // 解析DeepSeek的响应为ComicContent格式
+                return ParseDeepSeekResponse(deepSeekResponse);
+            }
+            catch (Exception deepSeekEx)
+            {
+                deepSeekException = deepSeekEx;
+                var totalDuration = DateTime.UtcNow - startTime;
+                _logger.LogError(deepSeekEx, "DeepSeek API也调用失败，总耗时: {Duration}ms，错误类型: {ExceptionType}，错误消息: {ErrorMessage}", 
+                    totalDuration.TotalMilliseconds, deepSeekEx.GetType().Name, deepSeekEx.Message);
+                
+                // 如果两个API都失败，抛出详细的异常信息
+                var errorMessage = $"所有API调用都失败。Gemini错误: {geminiException.Message}; DeepSeek错误: {deepSeekException.Message}; 总耗时: {totalDuration.TotalMilliseconds}ms";
+                _logger.LogError("API调用完全失败: {ErrorMessage}", errorMessage);
+                
+                throw new InvalidOperationException(errorMessage, new AggregateException(geminiException, deepSeekException));
+            }
+        }
+    }
+
+    /// <summary>
+    /// 解析DeepSeek API的响应为ComicContent格式
+    /// </summary>
+    private ComicContent ParseDeepSeekResponse(string response)
+    {
+        try
+        {
+            // 尝试从响应中提取漫画内容
+            var lines = response.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            var title = "数学漫画";
+            var panels = new List<PanelContent>();
+
+            // 简单的解析逻辑
+            var currentPanel = new PanelContent();
+            var panelCount = 0;
+
+            foreach (var line in lines)
+            {
+                var trimmedLine = line.Trim();
+                
+                if (trimmedLine.Contains("标题") || trimmedLine.Contains("title"))
+                {
+                    title = ExtractTitle(trimmedLine);
+                }
+                else if (trimmedLine.Contains("面板") || trimmedLine.Contains("panel"))
+                {
+                    if (currentPanel.ImageDescription != null)
+                    {
+                        panels.Add(currentPanel);
+                    }
+                    currentPanel = new PanelContent();
+                    panelCount++;
+                }
+                else if (trimmedLine.Contains("图像") || trimmedLine.Contains("场景"))
+                {
+                    currentPanel.ImageDescription = ExtractContent(trimmedLine);
+                }
+                else if (trimmedLine.Contains("对话") || trimmedLine.Contains("dialogue"))
+                {
+                    currentPanel.Dialogue = new List<string> { ExtractContent(trimmedLine) };
+                }
+                else if (trimmedLine.Contains("旁白") || trimmedLine.Contains("narration"))
+                {
+                    currentPanel.Narration = ExtractContent(trimmedLine);
+                }
+            }
+
+            // 添加最后一个面板
+            if (currentPanel.ImageDescription != null)
+            {
+                panels.Add(currentPanel);
+            }
+
+            // 确保至少有3个面板
+            while (panels.Count < 3)
+            {
+                panels.Add(CreateDefaultPanel(panels.Count + 1));
+            }
+
+            return new ComicContent
+            {
+                Title = title,
+                Panels = panels
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "解析DeepSeek响应失败");
+            return CreateFallbackComicContent("数学学习");
+        }
+    }
+
+    private string ExtractTitle(string line)
+    {
+        var colonIndex = line.IndexOf(':');
+        if (colonIndex > 0 && colonIndex < line.Length - 1)
+        {
+            return line.Substring(colonIndex + 1).Trim().Trim('"');
+        }
+        return "数学漫画";
+    }
+
+    private string ExtractContent(string line)
+    {
+        var colonIndex = line.IndexOf(':');
+        if (colonIndex > 0 && colonIndex < line.Length - 1)
+        {
+            return line.Substring(colonIndex + 1).Trim().Trim('"');
+        }
+        return line.Trim();
+    }
+
+    private PanelContent CreateDefaultPanel(int panelNumber)
+    {
+        return new PanelContent
+        {
+            ImageDescription = $"第{panelNumber}个面板：友好的角色在学习数学",
+            Dialogue = new List<string> { "让我们一起学习数学吧！" },
+            Narration = "数学学习是一件有趣的事情。"
+        };
+    }
+
+    /// <summary>
+    /// 创建备用的漫画内容，当所有API都失败时使用
+    /// </summary>
+    private ComicContent CreateFallbackComicContent(string topic)
+    {
+        _logger.LogInformation("创建备用漫画内容，主题: {Topic}", topic);
+        
+        return new ComicContent
+        {
+            Title = $"数学学习：{topic}",
+            Panels = new List<PanelContent>
+            {
+                new PanelContent
+                {
+                    ImageDescription = "一个友好的老师站在黑板前，黑板上写着数学题目",
+                    Dialogue = new List<string> { "今天我们来学习有趣的数学！" },
+                    Narration = "数学课开始了，老师准备教大家新的知识。"
+                },
+                new PanelContent
+                {
+                    ImageDescription = "学生们认真听讲，举手提问",
+                    Dialogue = new List<string> { "老师，这个怎么算呢？" },
+                    Narration = "同学们积极参与，提出自己的疑问。"
+                },
+                new PanelContent
+                {
+                    ImageDescription = "老师耐心解释，在黑板上演示解题步骤",
+                    Dialogue = new List<string> { "让我来一步步教你们！" },
+                    Narration = "老师详细讲解每个步骤，确保大家都能理解。"
+                },
+                new PanelContent
+                {
+                    ImageDescription = "学生们恍然大悟，开心地鼓掌",
+                    Dialogue = new List<string> { "原来如此！我明白了！" },
+                    Narration = "通过老师的耐心教导，同学们成功掌握了新的数学知识。"
+                }
+            }
+        };
     }
 }
 

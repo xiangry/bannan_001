@@ -9,15 +9,17 @@ namespace MathComicGenerator.Tests.Services;
 public class ComicGenerationServiceTests
 {
     private readonly Mock<IGeminiAPIService> _mockGeminiService;
+    private readonly Mock<IDeepSeekAPIService> _mockDeepSeekService;
     private readonly Mock<ILogger<ComicGenerationService>> _mockLogger;
     private readonly ComicGenerationService _service;
 
     public ComicGenerationServiceTests()
     {
         _mockGeminiService = new Mock<IGeminiAPIService>();
+        _mockDeepSeekService = new Mock<IDeepSeekAPIService>();
         _mockLogger = new Mock<ILogger<ComicGenerationService>>();
         
-        _service = new ComicGenerationService(_mockGeminiService.Object, _mockLogger.Object);
+        _service = new ComicGenerationService(_mockGeminiService.Object, _mockDeepSeekService.Object, _mockLogger.Object);
     }
 
     [Fact]

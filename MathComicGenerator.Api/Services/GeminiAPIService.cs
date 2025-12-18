@@ -83,20 +83,22 @@ public class GeminiAPIService : IGeminiAPIService
 
             return ParseComicContent(openAIResponse.Choices.First().Message.Content);
         }
-        catch (TaskCanceledException ex) when (ex.InnerException is TimeoutException)
+        catch (TaskCanceledException ex)
         {
-            _logger.LogError(ex, "Gemini API request timeout");
-            throw new GeminiAPIException("Request timeout", "TIMEOUT");
+            var timeoutMessage = $"Gemini API请求超时 (配置超时时间: {_config.TimeoutSeconds}秒)";
+            _logger.LogError(ex, "{TimeoutMessage}，异常详情: {ExceptionMessage}", timeoutMessage, ex.Message);
+            throw new GeminiAPIException($"{timeoutMessage}: {ex.Message}", "TIMEOUT");
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "Gemini API network error");
-            throw new GeminiAPIException("Network error", "NETWORK_ERROR");
+            var networkMessage = $"Gemini API网络错误，BaseUrl: {_config.BaseUrl}";
+            _logger.LogError(ex, "{NetworkMessage}，异常详情: {ExceptionMessage}", networkMessage, ex.Message);
+            throw new GeminiAPIException($"{networkMessage}: {ex.Message}", "NETWORK_ERROR");
         }
         catch (JsonException ex)
         {
-            _logger.LogError(ex, "Failed to parse Gemini API response");
-            throw new GeminiAPIException("Response parsing error", "PARSE_ERROR");
+            _logger.LogError(ex, "解析Gemini API响应失败，异常详情: {ExceptionMessage}", ex.Message);
+            throw new GeminiAPIException($"响应解析错误: {ex.Message}", "PARSE_ERROR");
         }
     }
 

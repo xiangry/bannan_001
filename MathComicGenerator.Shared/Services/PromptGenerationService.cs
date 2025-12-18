@@ -202,48 +202,42 @@ public class PromptGenerationService : IPromptGenerationService
 
     private string ExtractPromptFromResponse(string response)
     {
-        // 从AI响应中提取主要的提示词内容
-        var lines = response.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-        var promptLines = new List<string>();
-        bool inPromptSection = false;
-
-        foreach (var line in lines)
+        if (string.IsNullOrEmpty(response))
         {
-            var trimmedLine = line.Trim();
-            
-            // 跳过标题和说明性文字
-            if (trimmedLine.StartsWith("提示词:") || 
-                trimmedLine.StartsWith("漫画提示词:") ||
-                trimmedLine.StartsWith("创作提示词:"))
-            {
-                inPromptSection = true;
-                continue;
-            }
+            return "默认提示词：请生成一个适合儿童的数学教育漫画。";
+        }
 
-            // 停止在建议部分
-            if (trimmedLine.StartsWith("建议:") || 
-                trimmedLine.StartsWith("改进建议:") ||
-                trimmedLine.StartsWith("优化建议:"))
+        // 简化解析逻辑：查找建议部分，提取之前的所有内容作为提示词
+        var suggestionMarkers = new[] { "改进建议:", "建议:", "优化建议:", "---" };
+        var suggestionIndex = -1;
+        
+        foreach (var marker in suggestionMarkers)
+        {
+            var index = response.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (index > 0)
             {
+                suggestionIndex = index;
                 break;
             }
-
-            if (inPromptSection || (!trimmedLine.StartsWith("##") && !trimmedLine.StartsWith("**")))
-            {
-                promptLines.Add(trimmedLine);
-            }
         }
-
-        var result = string.Join("\n", promptLines).Trim();
         
-        // 如果没有找到明确的提示词部分，返回整个响应的前半部分
-        if (string.IsNullOrEmpty(result))
+        string promptContent;
+        if (suggestionIndex > 0)
         {
-            var halfLength = response.Length / 2;
-            result = response.Substring(0, Math.Min(halfLength, response.Length)).Trim();
+            promptContent = response.Substring(0, suggestionIndex).Trim();
         }
-
-        return result;
+        else
+        {
+            promptContent = response.Trim();
+        }
+        
+        // 移除开头的"提示词:"标记（如果存在）
+        if (promptContent.StartsWith("提示词:", StringComparison.OrdinalIgnoreCase))
+        {
+            promptContent = promptContent.Substring(4).Trim();
+        }
+        
+        return string.IsNullOrEmpty(promptContent) ? response : promptContent;
     }
 
     private List<string> ExtractSuggestionsFromResponse(string response)

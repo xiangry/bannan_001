@@ -195,7 +195,7 @@ public class AgeGroupParameterPropertyTests
             _ => false
         };
     }
-}
+
     [Property]
     public bool Property12_PanelCountControl_UserSpecifiedPanelCountIsRespected(PositiveInt panelCount)
     {
@@ -553,3 +553,4 @@ public class AgeGroupParameterPropertyTests
         
         return isConsistent && isValid;
     }
+}
