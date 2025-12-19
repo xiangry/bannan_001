@@ -11,8 +11,11 @@ $payload = @'
 
 $payload | Set-Content -Path .\payload.json -Encoding UTF8
 
+# Use the local API port used by dotnet run (http://localhost:5000) for diagnostics.
+$uri = 'http://localhost:5000/api/comic/generate-prompt'
+
 try {
-    $resp = Invoke-RestMethod -Uri 'https://localhost:7109/api/comic/generate-prompt' -Method Post -Body (Get-Content .\payload.json -Raw) -ContentType 'application/json' -TimeoutSec 180 -ErrorAction Stop
+    $resp = Invoke-RestMethod -Uri $uri -Method Post -Body (Get-Content .\payload.json -Raw) -ContentType 'application/json' -TimeoutSec 180 -ErrorAction Stop
     $resp | ConvertTo-Json -Depth 10 | Set-Content -Path .\response.json -Encoding UTF8
     Write-Host 'HTTP request completed successfully.'
 } catch {

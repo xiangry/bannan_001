@@ -582,11 +582,18 @@ public class ComicGenerationService : IComicGenerationService
                 var totalDuration = DateTime.UtcNow - startTime;
                 _logger.LogError(deepSeekEx, "DeepSeek API也调用失败，总耗时: {Duration}ms，错误类型: {ExceptionType}，错误消息: {ErrorMessage}", 
                     totalDuration.TotalMilliseconds, deepSeekEx.GetType().Name, deepSeekEx.Message);
-                
+
+                // 如果是配置问题（例如未配置 API key），则不要继续抛出 500，改为返回备用内容
+                if (deepSeekEx is ConfigurationException || deepSeekEx.Message?.Contains("API key is not configured", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    _logger.LogWarning("DeepSeek 未配置或配置错误：{Message}. 返回备用漫画内容。", deepSeekEx.Message);
+                    return CreateFallbackComicContent("数学学习");
+                }
+
                 // 如果两个API都失败，抛出详细的异常信息
-                var errorMessage = $"所有API调用都失败。Gemini错误: {geminiException.Message}; DeepSeek错误: {deepSeekException.Message}; 总耗时: {totalDuration.TotalMilliseconds}ms";
+                var errorMessage = $"所有API调用都失败。Gemini错误: {geminiException?.Message}; DeepSeek错误: {deepSeekException.Message}; 总耗时: {totalDuration.TotalMilliseconds}ms";
                 _logger.LogError("API调用完全失败: {ErrorMessage}", errorMessage);
-                
+
                 throw new InvalidOperationException(errorMessage, new AggregateException(geminiException, deepSeekException));
             }
         }
