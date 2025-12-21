@@ -113,8 +113,8 @@ echo 等待 API 服务器启动...
 timeout /t 10 /nobreak > nul
 
 echo.
-echo 启动 Web 服务器 (https://localhost:5001)...
-start "Math Comic Generator Web" cmd /k "title Math Comic Generator Web && cd /d "%~dp0" && chcp 65001 > nul && echo 启动 Web 服务器... && dotnet run --project MathComicGenerator.Web --urls https://localhost:5001"
+echo 启动 Vue 开发服务器 (http://localhost:5173)...
+start "Math Comic Generator Vue" cmd /k "title Math Comic Generator Vue && cd /d "%~dp0MathComicGenerator.Web.Vue" && chcp 65001 > nul && echo 启动 Vue 开发服务器... && npm install --no-audit --no-fund && npm run dev"
 
 echo.
 echo ========================================
@@ -123,10 +123,11 @@ echo ========================================
 echo.
 echo 服务地址：
 echo   API:  https://localhost:7109
-echo   Web:  https://localhost:5001
+echo   Web (Vite dev):  http://localhost:5173
 echo.
 echo 提示：
-echo - 等待几秒钟让服务完全启动
+echo - 前端开发使用 Vite (http://localhost:5173)，API 请求由 Vite 代理到后端 /api
+echo - 如果需要后端托管的静态站点，请运行 scripts\build_and_deploy_vue.ps1 并重启 API
 echo - 如果遇到 SSL 证书问题，运行：dotnet dev-certs https --trust
 echo - 查看各服务窗口的启动日志
 echo - 按 Ctrl+C 在各服务窗口中停止服务

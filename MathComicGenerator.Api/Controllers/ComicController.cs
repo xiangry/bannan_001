@@ -374,8 +374,62 @@ public class ComicController : ControllerBase
                 { "options", request.Options }
             });
 
-            _logger.LogError(ex, "Unexpected error during prompt generation");
-            return StatusCode(500, new { error = "生成提示词时发生错误，请稍后重试" });
+            _logger.LogError(ex, "Unexpected error during prompt generation: {ExceptionType} - {Message}", 
+                ex.GetType().Name, ex.Message);
+
+            // 提供更详细的错误信息
+            var errorMessage = "生成提示词时发生错误";
+            var errorDetails = new List<string>();
+
+            // 检查是否是配置问题
+            if (ex is MathComicGenerator.Api.Services.ConfigurationException configEx)
+            {
+                errorMessage = "DeepSeek API配置错误";
+                errorDetails.AddRange(configEx.ResolutionSteps ?? Array.Empty<string>());
+            }
+            // 检查是否是认证问题
+            else if (ex is MathComicGenerator.Api.Services.AuthenticationException authEx)
+            {
+                errorMessage = "DeepSeek API认证失败";
+                errorDetails.AddRange(authEx.ResolutionSteps ?? Array.Empty<string>());
+            }
+            // 检查是否是网络问题
+            else if (ex is MathComicGenerator.Api.Services.NetworkException networkEx)
+            {
+                errorMessage = "网络连接错误";
+                errorDetails.AddRange(networkEx.ResolutionSteps ?? Array.Empty<string>());
+            }
+            // 检查是否是超时问题
+            else if (ex is TimeoutException || ex.InnerException is TimeoutException)
+            {
+                errorMessage = "请求超时，请稍后重试";
+                errorDetails.Add("1. 检查网络连接是否稳定");
+                errorDetails.Add("2. 尝试减少提示词长度");
+                errorDetails.Add("3. 稍后重试");
+            }
+            // 检查是否是DeepSeek API特定错误
+            else if (ex.Message?.Contains("DeepSeek", StringComparison.OrdinalIgnoreCase) == true ||
+                     ex.Message?.Contains("API key", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                errorMessage = "DeepSeek API调用失败";
+                errorDetails.Add("1. 检查appsettings.json中的DeepSeekAPI:ApiKey配置");
+                errorDetails.Add("2. 确认API密钥是否有效");
+                errorDetails.Add("3. 检查API配额是否充足");
+            }
+            else
+            {
+                errorDetails.Add("1. 检查API服务日志获取详细信息");
+                errorDetails.Add("2. 确认API服务正常运行");
+                errorDetails.Add("3. 稍后重试");
+            }
+
+            return StatusCode(500, new 
+            { 
+                error = errorMessage,
+                details = errorDetails,
+                exceptionType = ex.GetType().Name,
+                message = ex.Message
+            });
         }
         finally
         {
